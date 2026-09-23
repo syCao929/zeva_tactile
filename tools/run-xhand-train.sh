@@ -15,7 +15,7 @@
 #   tools/run-xhand-train.sh start [run名]    启动 / 续训
 #   tools/run-xhand-train.sh status [run名]   状态、进度、最新 loss、GPU
 #   tools/run-xhand-train.sh tail [run名]     跟踪日志（Ctrl-C 只退 tail）
-#   tools/run-xhand-train.sh stop             优雅停止（SIGTERM，会先存检查点）
+#   tools/run-xhand-train.sh stop             停止（SIGTERM；⚠️ 不存检查点，最多丢 SAVE_ITER 步）
 #   tools/run-xhand-train.sh fresh [run名]    归档该 run，下次从基座重训
 #   tools/run-xhand-train.sh runs             列出所有 run 及占用
 #   tools/run-xhand-train.sh rm <run名>       删除指定 run（二次确认）
@@ -57,7 +57,7 @@ resolve_name() {
   echo "$NAME_PREFIX-$(date '+%Y%m%d')"
 }
 
-CMD="${1:-start}"
+CMD="${1:-}"   # 不带子命令时打用法，绝不默认开跑（误触会启动 137GB 检查点的训练）
 
 case "$CMD" in
 start)
@@ -161,7 +161,12 @@ stop)
   if ! pid=$(running_pid); then echo "未在运行" >&2; exit 1; fi
   # 负 PID 杀整个进程组：setsid 让启动进程成为会话/组长，torchrun 及其 8 个 rank
   # 都在组内。只杀组长会留下孤儿进程继续占 GPU、继续写检查点。
-  echo "向进程组 -$pid 发送 SIGTERM —— termination_signal_checkpoint 回调会先存一次检查点"
+  #
+  # NOTE: 这**不会**存检查点。`termination_signal_checkpoint` 只认 SIGUSR1，
+  # 且靠 Slurm 哨兵文件 $SLURM_LOG_DIR/SIGUSR1_RECEIVED 触发；本机无 Slurm，
+  # 该路径为空，回调直接 return。它注册的 SIGTERM 处理器只打日志。
+  # 想不丢进度就别 stop，让它跑到下一个 SAVE_ITER。
+  echo "向进程组 -$pid 发送 SIGTERM（注意：不会存检查点，最多丢 SAVE_ITER 步）"
   kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null
   for _ in $(seq 1 90); do
     kill -0 "$pid" 2>/dev/null || break

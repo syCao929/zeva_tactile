@@ -1,272 +1,263 @@
-# zeva-work 环境说明
+# Zeva on UR7e + XHand
 
-Zeva（In-Context Causal Learning）在 Cosmos Framework 上的复现环境。
-生成时间：2026-09-20。
+在自有机器人数据上复现 **Zeva（In-Context Causal Learning）** 的完整训练与部署流水线。
 
-## 1. 目录职责
+Zeva 让策略记住"之前几次尝试里我的动作造成了什么后果"，并把这段因果记忆喂回给策略。
+本仓库补上了官方 release **完全没有开源**的训练链路——从 CTE 训练循环到数据契约层，
+再到策略注入与真机服务端。
 
-| 路径 | 说明 |
-| --- | --- |
-| `env.sh` | **入口**。`source env.sh` 后所有变量与 PATH 就位 |
-| `envs/zeva/` | 实际使用的 Python 环境（conda 建，Python 3.13.15，422 个包） |
-| `cosmos-framework/` | Cosmos Framework @ `ee58e41`，**已 rsync 叠加 Zeva overlay** |
-| `Zeva/` | Zeva overlay 原始仓库（只读参照，不要在这里改代码） |
-| `tools/uv`, `tools/python` | uv 及它下载的 CPython |
-| `cache/` | uv/pip/conda 缓存（约 10GB） |
-| `models/`, `datasets/`, `runs/` | 权重、数据、训练输出 |
+| | |
+|---|---|
+| 机器人 | UR7e + XHand（18 自由度：6 臂关节 + 12 手关节）|
+| 任务 | `press_button_4_times`（101 episodes / 15 fps）|
+| 硬件 | 1 节点 8×A800-80G |
+| 基座 | `nvidia/Cosmos3-Nano`（30 GB DCP）+ Qwen3-VL-8B + Wan2.2 VAE |
 
-> `cosmos-framework/.venv` 是早期 uv 建的**空壳**（只有 `_virtualenv.py`），
-> 实际环境是 `envs/zeva`。`env.sh` 里的 `UV_PROJECT_ENVIRONMENT` 仍指向它，
-> 但环境是用 `uv pip install --python envs/zeva/bin/python` 装的，两者别混用。
+> **本仓库只包含复现所需的改动**，不含 Cosmos Framework 上游代码之外的第三方资源。
+> 2026-09-21 之前的详细排障记录（权重校验、网络限制、逐个 bug 的定位过程）
+> 存档在 [`NOTES_archive_20260921.md`](NOTES_archive_20260921.md)。
 
-## 2. 已完成
+---
 
-- **Python 依赖**：`envs/zeva` 装好 422 个包（`policy-server` + `cu128` 组）。
-  清单里剩 17 个全是 darwin/win32/py<3.11 条件包，Linux 上本就无需安装。
-  验证通过：torch 2.10.0+cu128、CUDA 8 卡 A800-80G、flash_attn 2.7.4、
-  torchcodec 0.10、transformers 4.57.6、cosmos_framework 及全部 zeva 子模块可 import。
-- **mujoco 3.3.2**：不在 `policy-server` 组（属 `libero` 组），已单独补装，RoboCasa 模拟器需要。
-- **env.sh**：新增 `HF_ENDPOINT`（HF 被墙）、`ROBOCASA365_ROOT`、`MUJOCO_GL=egl`、`PYOPENGL_PLATFORM=egl`。
-- **数据转换**：TactileTTT `press_button_4_times` → Cosmos 训练布局，零拷贝、源数据未改动。
-- **加载器**：`cosmos_framework/data/generator/action/datasets/xhand_lerobot_dataset.py`
-  与 embodiment `ur7e-xhand`（domain_id 23）。
-- **训练跑通**：8×A800 实测，loss 正常下降（见第 6 节）。
-- **真机 server**：`scripts/action_policy_server_xhand.py`，TactileTTT 客户端零代码改动可对接（见第 8 节）。
+## 目录
 
-## 3. 网络限制（重要）
+- [1. 环境](#1-环境)
+- [2. 方法概览](#2-方法概览)
+- [3. 阶段一：基础策略微调](#3-阶段一基础策略微调)
+- [4. 阶段二：CTE 训练](#4-阶段二cte-训练)
+- [5. 阶段三：特征缓存与注入训练](#5-阶段三特征缓存与注入训练)
+- [6. 部署](#6-部署)
+- [7. 可调参数速查表](#7-可调参数速查表)
+- [8. 已知问题](#8-已知问题)
+- [9. 现状与局限](#9-现状与局限)
 
-- `huggingface.co` **不可达**（DNS 被污染 + 直连超时）。`hf-mirror.com` 可达但很慢
-  （实测 2 KB/s ~ 100 KB/s）。机器全局走内网 HTTP 代理（地址见运维配置）。
-- **91GB 的 stage2 权重按此速度需 2~10 天**，不建议在本机拉取。
-- pypi / github 经代理尚可（uv 装 5.6GB 包耗时约 1 小时）。
+---
 
-## 4. 权重就位情况
+## 1. 环境
 
-### 4.1 已有（训练所需全部就位）
+### 1.1 目录结构
 
-| 项 | 路径 | 来源 | 大小 | 校验 |
-| --- | --- | --- | ---: | --- |
-| 基座 DCP | `models/cosmos3-nano/` | `nvidia/Cosmos3-Nano` 已转 DCP | 30.4 GB | ✅ 814 张量 / 6 分片与元数据一致 / 通过 `_validate_checkpoint` |
-| Qwen3-VL-8B | `models/Qwen3-VL-8B-Instruct/` | `Qwen/Qwen3-VL-8B-Instruct` | 17.5 GB | ✅ 4 分片 / 750 张量齐全；`AutoConfig`+`AutoTokenizer`+`AutoProcessor` 实测可加载 |
-| Wan2.2 VAE | `models/Wan2.2-TI2V-5B/Wan2.2_VAE.pth` | `Wan-AI/Wan2.2-TI2V-5B` | 2.82 GB | ✅ 字节数与 HF 完全一致；合法 torch 归档 |
+所有路径都挂在 `$ZEVA_WORK`（仓库根目录，本机为 `/workspace/mnt/sqzhang26/zeva-work`）。
 
-> `Wan2.2-TI2V-5B/` 是整个仓库（32 GB），其中只有 `Wan2.2_VAE.pth` 是我们需要的，
-> 其余是 TI2V-5B 模型本身。**仓库别选错**：`Wan2.2-T2V-A14B` / `I2V-A14B` 里是
-> `Wan2.1_VAE.pth`（旧版 VAE，压缩率不同，加载会失败）。
-
-### 4.2 可选（只有复现 RoboCasa 才需要）
-
-| 项 | 目标路径 | 来源 | 大小 |
-| --- | --- | --- | ---: |
-| Zeva release | `models/zeva/` | HF `chen123fu/zeva-robocasa` | **91 GB** |
-| RoboCasa365 | `sim/robocasa365/` | GitHub `robocasa/robocasa` + 资产 | 数 GB |
-
-> ⚠️ `Zeva/README.md` 里写的权重仓库 `chen123fu/zeva` **不存在或是私有的**（返回 401），
-> 公开可用的是 **`chen123fu/zeva-robocasa`**。
->
-> 另外：**训练自己的数据完全不需要这 91 GB**——它是推理产物，
-> 里面的 Zeva 模块是 RoboCasa 专用的。
-
-### 4.2 仓库布局 ≠ 文档布局
-
-`docs/reproduce.md` 写的路径和 HF 仓库实际布局不一致。下载完成后执行
-`bash tools/link-zeva-release.sh` 建软链映射即可让文档命令原样可用：
-
-| 文档里的路径 | 仓库实际路径 |
-| --- | --- |
-| `weights/stage1/cte_step_000500.pt` | `weights/stage1/zeva_cte.pt` |
-| `weights/stage2_iter_000005000/` | `weights/stage2/model/` |
-| `weights/stage3_iter_000005000/best.pt` | `weights/stage3/best.pt` |
-
-stage2 是 **8 个真实分片**（元数据 1696 个张量合计 91.05GB），不是副本，
-8 个 `__N_0.distcp` 一个都不能少。其中 `net`(bf16) 30.4GB、`net_ema`(fp32) 60.7GB。
-
-### 4.3 系统库：缺 libEGL
-
-本机只有 `libGL.so.1`，**完全没有 libEGL**（连 NVIDIA 的 `libEGL_nvidia.so.0` 都没有）。
-`docs/reproduce.md` 要求 `MUJOCO_GL=egl` 做无头渲染，但在缺 libEGL 时设了它会让
-`import mujoco` 直接抛 `AttributeError: 'NoneType' object has no attribute 'eglQueryString'`。
-
-`env.sh` 已改成**条件启用**（检测到 libEGL 才设），并会打印一行提示。修复方式二选一：
-
-```bash
-apt-get install -y libegl1 libgl1        # 简单，需要 root/网络
-# 或重装带 EGL 的 NVIDIA 驱动
+```
+$ZEVA_WORK/
+├── env.sh                  ← 唯一的入口，所有变量从这里来
+├── cosmos-framework/       Cosmos Framework + 本仓库的全部改动
+├── envs/zeva/              conda 环境（Python 3.13.15，422 包）
+├── models/                 权重
+├── datasets/               数据与中间产物
+├── runs/                   训练输出（检查点、配置快照）
+├── logs/                   训练日志
+└── tools/                  启动脚本
 ```
 
-静默提示：`export ZEVA_SKIP_EGL_WARNING=1`。
-sim 源码本身可正常 `import mujoco`，受影响的只有离屏渲染。
+### 1.2 激活环境
 
-### 4.4 可选
+```bash
+cd /workspace/mnt/sqzhang26/zeva-work
+source env.sh
+```
 
-- 训练数据集若要用 `robocasa365` 流程，还需 RoboCasa365 的 Atomic-5 数据集。
-- 预训练基座 `nvidia/Cosmos3-Nano-Policy-DROID`（若不做全量训练则不需要）。
+`env.sh` 会设置好 `ZEVA_WORK` / `PYTHONPATH` / `PATH`、HF 镜像、各级缓存目录，
+以及后面所有命令要用的环境变量：
 
-## 5. 数据转换怎么做的
+| 变量 | 指向 |
+|---|---|
+| `XHAND_DATA_ROOT` | 转换后的 LeRobot 数据树 |
+| `XHAND_ACTION_STATS_PATH` | `meta/feature_stats_compact.json`（驱动 minmax 归一化）|
+| `BASE_CHECKPOINT_PATH` | 基座 DCP |
+| `WAN_VAE_PATH` | Wan2.2 VAE 权重 |
+| `QWEN_VLM_PATH` | Qwen3-VL-8B |
+| `IMAGINAIRE_OUTPUT_ROOT` | 训练输出根（`runs/`）|
+
+> `env.sh` 可重复 source。若设置了 `ZEVA_SKIP_EGL_WARNING=1` 可静默 libEGL 提示。
+
+### 1.3 权重清单
+
+| 项 | 路径 | 大小 | 必需性 |
+|---|---|---:|---|
+| 基座（DCP）| `models/cosmos3-nano/` | 30 GB | 阶段一必需 |
+| Qwen3-VL-8B | `models/Qwen3-VL-8B-Instruct/` | 41 GB | 训练与部署必需 |
+| Wan2.2 VAE | `models/Wan2.2-TI2V-5B/Wan2.2_VAE.pth` | 2.82 GB | 训练与部署必需 |
+| Zeva release | `models/zeva/` | 91 GB | **不需要**（见下）|
+
+> ⚠️ **官方 91 GB 的 Zeva release 权重对本复现没有用**。它是 RoboCasa 专用的推理产物，
+> 里面的 CTE 是在 RoboCasa 上训的、stage2 模块绑定 RoboCasa 的动作维度。
+> 我们要在自己的数据上重新训这两者，所以只需要基座 + 两个 tokenizer 权重。
+> （`models/zeva/weights/` 是空目录。）
+
+> ⚠️ **VAE 别选错仓库**：必须是 `Wan2.2-TI2V-5B` 里的 `Wan2.2_VAE.pth`。
+> `Wan2.2-T2V-A14B` / `I2V-A14B` 里是 `Wan2.1_VAE.pth`（旧版，压缩率不同，加载会失败）。
+
+> **基座说明**：当前 `BASE_CHECKPOINT_PATH` 指向 `models/cosmos3-nano`，
+> 即 `nvidia/Cosmos3-Nano` 的原始基座（已转 DCP）。
+> 实验配置的本意是改用后训练版 `nvidia/Cosmos3-Nano-Policy-DROID`（动作头已训过）——
+> 若换过去，把它转成 DCP 后覆盖 `BASE_CHECKPOINT_PATH` 即可，配置不用改。
+
+### 1.4 数据
+
+源数据（`TactileTTT/data/press_button_4_times`，36 GB）**只读**，与其他项目共用。
+转换脚本不复制、不改写，只新建目录树 + 软链：
 
 ```bash
 source env.sh
-python tools/convert_xhand_dataset.py          # 默认源/目标已配好
-python tools/convert_xhand_dataset.py --help   # 过滤、链接方式等选项
+python tools/convert_xhand_dataset.py
 ```
 
-**方法**：不复制、不改写源数据，只新建目录树 + 软链。
+实际占用 **211 KB**。产出布局：
 
 ```
 datasets/press_button_4_times_merged_filtered/
 └── xhand/PressButton4Times/lerobot_v21/lerobot/
     ├── meta/{info.json, episodes.jsonl, tasks.jsonl, feature_stats_compact.json}
-    ├── data   -> 软链 TactileTTT/data/chunk-000
-    └── videos -> 软链 TactileTTT/videos/chunk-000
+    ├── data   -> 软链源数据
+    └── videos -> 软链源数据
 ```
 
-实际占用 **211 KB**（源数据 36GB 原样引用）。`episodes_stats.jsonl`(4GB) 与
-`stats.json`(103MB) 也走软链——加载器不读它们。
-
-**语义映射**（在加载器里定义，不动数据）：
+语义映射（在加载器里定义，不动数据）：
 
 | 项 | 源 | 目标 |
-| --- | --- | --- |
-| embodiment | `ur7e_xhand` | `ur7e-xhand`，domain_id **23** |
-| action | `[18]` 关节位置 | `full18`（全部）或 `arm6`（仅臂） |
-| state | `[1972]` | `arm6`/`arm22`/`arm34`/`full52` 可选，默认 `arm22` |
-| 相机 left | `observation.images.cam_left` | 同 |
-| 相机 wrist | `observation.images.cam_front` | **按约定充当 wrist**（源无腕部相机） |
-| fps | 15 | 15（加载器需显式传 `fps=15`，非默认 20） |
+|---|---|---|
+| embodiment | `ur7e_xhand` | `ur7e-xhand`（domain_id 23）|
+| action | `[18]` 关节位置 | `full18`（6 臂 + 12 手）|
+| state | `[1972]` | `arm22`（臂关节 + ee pose）|
+| 相机 | `cam_left` / `cam_front` | left / **wrist**（源无腕部相机，前视按约定充当）|
+| fps | 15 | 15（非加载器默认的 20，必须显式传）|
 
-state 布局：`[0:6]`臂关节pos `[6:12]`臂关节vel `[12:28]`ee_pose `[28:52]`手关节
-pos/torque **交错** `[52:1972]`触觉（未使用）。
+> **触觉未使用**。`observation.state[52:1972]` 是 1920 维触觉（534 通道活跃），
+> 但不在任何 state mode 里——见 [9. 现状与局限](#9-现状与局限)。
 
-**验证**：98 个训练 episode 共 42673 个窗口；抽查样本 `video=(3,33,256,512)`
-`action=(32,18)` `proprio=(22,)`；98/98 个 episode 末窗口边界全部通过；
-`proprio` 与 `action` 的手臂关节值一致。
+---
 
-## 6. 训练：已实测跑通
+## 2. 方法概览
 
-2026-09-21 用 8×A800 跑通，loss 正常下降：
+Zeva 由三个训练阶段组成，产物逐级依赖：
 
-| iteration | vision loss | action loss |
-| ---: | ---: | ---: |
-| 0 | 0.1415 | **2.6169** |
-| 2 | 0.1941 | 1.4038 |
-| 7 | 0.1629 | 0.9771 |
-| 9 | 0.0622 | **0.9053** |
+```
+ ┌─ 阶段一 ────────────────────────────────────────────────┐
+ │  Cosmos3-Nano VLA 微调                                    │  137 GB/检查点
+ │  loss: 视频流匹配 ×1 + 动作流匹配 ×10                      │
+ └─────────────────────────────────────────────────────────┘
+                            ↓ 冻结
+ ┌─ 阶段三：注入 ──────────────────────────────────────────┐
+ │  只训 behavior_pbd / behavior_adapter /                    │  137 GB/检查点
+ │       behavior_global_projector                            │
+ │  loss: behavior_prior_nll ×0.01                            │
+ └─────────────────────────────────────────────────────────┘
+                            ↑ 提供 behavior_* 张量
+ ┌─ 阶段二 ────────────────────────────────────────────────┐
+ │  CausalTransitionEncoder（9.49M 参数，从零训）             │  39 MB/检查点
+ │  loss: 5 项复合，主力是 effect 对比损失                     │
+ └─────────────────────────────────────────────────────────┘
+```
 
-### 第一阶段：policy 微调（`run-xhand-train.sh`）
+**三者训的是完全不同的东西**：
 
-run 名由你指定，它同时决定**检查点和日志的落盘位置**：
+| 阶段 | 网络 | 在学什么 | 规模 |
+|---|---|---|---|
+| 一 | Cosmos3-Nano VLA | 「看画面 + 听指令 → 出动作」的本能 | ~30 GB 权重 |
+| 二 | CausalTransitionEncoder | 「刚才那 16 步造成了什么后果」 | 9.49M 参数 |
+| 三 | 三个小模块（策略冻结）| 「把因果记录翻译成策略听得懂的话」 | 极小 |
+
+### 推理时的数据流
+
+```
+初始观测 ─→ VAE ─→ 冻结策略 VLM readout ─→ [stage3 head] ─→ task-context bank
+                                                                   │
+                                                         behavior_global[256]
+                                                                   │
+边界帧序列 ─→ CTE ─┬─→ behavior_phase[128]                         │
+                   └─→ behavior_effect[4,128] + valid              │
+                              │                                    │
+                              └──────────────┬─────────────────────┘
+                                             ▼
+                                stage2 模块（behavior_pbd / adapter）
+                                             │
+                                ┌────────────┴────────────┐
+                                ▼                         ▼
+                          prefix token            动作先验（高斯）
+                                │                         │
+                                └──────→ 冻结策略 ←────────┘
+                                            │
+                                       输出动作块
+```
+
+> **单任务不需要 stage3**。全仓库 `bidirectional_supervised_contrastive_loss` 零调用点，
+> 官方也没训过它。单任务下 bank 只有 1 条 entry，检索是恒等映射，
+> 服务端用 `--task-context-instruction` 直接取回即可。多任务时才需要训。
+
+---
+
+## 3. 阶段一：基础策略微调
+
+在自有数据上微调 Cosmos3-Nano，得到一个能用的 VLA。所有后续阶段都建立在它之上。
+
+### 启动
+
+```bash
+cd $ZEVA_WORK
+tools/run-xhand-train.sh start v1-20260921
+```
+
+**run 名同时决定检查点和日志的位置**，**同名 = 续训，换名 = 新开一个 run**：
 
 ```
 runs/zeva/action_xhand/<run名>/checkpoints/iter_XXXXXXXX/
 logs/<run名>.log
 ```
 
-**同名 = 续训，换名 = 新开一个 run。**
-
 ```bash
-cd $ZEVA_WORK
-
-# 首次训练（名字自己定，建议带日期）
-tools/run-xhand-train.sh start v1-20260921
-
-# 中断后续训 —— 输入同一个名字即可
-tools/run-xhand-train.sh start v1-20260921
-
-# 另起一个实验/改超参后重训 —— 换个名字
-tools/run-xhand-train.sh start v2-20260922
-
 # 管理
-tools/run-xhand-train.sh status [名]   # 状态 / 进度 / 最新 loss / GPU（省略名字用最近启动的）
-tools/run-xhand-train.sh tail [名]     # 跟踪日志（Ctrl-C 只退 tail）
-tools/run-xhand-train.sh stop          # 停止整个进程组（SIGTERM，会先存检查点）
+tools/run-xhand-train.sh status [名]   # 进度 / loss / GPU
+tools/run-xhand-train.sh tail   [名]   # 跟踪日志（Ctrl-C 只退 tail）
+tools/run-xhand-train.sh stop          # 停止（⚠️ 不存检查点，见 8.2）
 tools/run-xhand-train.sh runs          # 列出所有 run 及占用
-tools/run-xhand-train.sh fresh [名]     # 归档该 run（改名带时间戳），下次从基座重训
-tools/run-xhand-train.sh rm <名>        # 删除指定 run（二次确认）
+tools/run-xhand-train.sh fresh [名]     # 归档该 run，下次从基座重训
+tools/run-xhand-train.sh rm <名>        # 删除（二次确认）
 ```
 
-可覆盖的参数（环境变量，放在命令前）：
+### 可调参数
 
 ```bash
 MAX_ITER=20000 SAVE_ITER=1000 tools/run-xhand-train.sh start v1-20260921
 EXTRA_OVERRIDES="optimizer.lr=1e-4" tools/run-xhand-train.sh start v1-20260921
 ```
 
-### 第二阶段：CTE 训练（`run-cte-train.sh`）
+| 变量 | 默认 | 说明 |
+|---|---:|---|
+| `MAX_ITER` | 5000 | 训练步数 |
+| `SAVE_ITER` | 500 | 检查点间隔（每个 137 GB，存档约 2 分钟）|
+| `NPROC_PER_NODE` | 8 | 卡数 |
+| `EXTRA_OVERRIDES` | — | 透传给 Hydra 的额外覆盖 |
 
-**CTE 完全独立于 policy**：它只读 VAE latent 缓存，不碰 policy 的任何产物，
-所以**两个阶段的训练可以并发跑**，各用各的 PID 文件和 run 名，互不干扰。
-
-```bash
-cd $ZEVA_WORK
-tools/run-cte-train.sh start cte-v1-20260921    # 启动（同名即续训）
-```
-
-启动前脚本会自检并打印缓存状态，正常应看到：
+### 判读日志
 
 ```
-== 检查环境 ==
-  ✅ CTE latent 缓存          (101 个 episode)
-== run: cte-v1-20260921 ==
-   检查点目录: $ZEVA_WORK/runs/zeva_cte/cte-v1-20260921
-   日志文件:   $ZEVA_WORK/logs/cte-v1-20260921.log
-   新 run，从随机初始化开始
+[RANK 0] 4136 : iter_speed 5.50 seconds per iteration | Loss: 0.2549
+stage2_loss_components: flow_matching_loss_vision=0.038, flow_matching_loss_action=0.0005
 ```
 
-#### 管理
+- `flow_matching_loss_action` 是主角（权重 10），应从 2.6 降到 1e-3 量级
+- `flow_matching_loss_vision` 权重 1，通常稳定在 0.01~0.1
 
-```bash
-tools/run-cte-train.sh status cte-v1-20260921
-tools/run-cte-train.sh tail   cte-v1-20260921
-tools/run-cte-train.sh stop
-tools/run-cte-train.sh runs
-```
+### 实测
 
-落盘位置（命名规则与第一阶段对应）：
+| iteration | vision loss | action loss |
+| ---: | ---: | ---: |
+| 0 | 0.1415 | **2.6169** |
+| 9 | 0.0622 | **0.9053** |
+| 4136 | — | ~0.25（总）|
 
-```
-runs/zeva_cte/<run名>/cte_step_XXXXXX.pt     # 可直接被推理端加载
-runs/zeva_cte/<run名>/cte_latest.pt          # 含优化器状态，供续训
-runs/zeva_cte/<run名>/train.log
-logs/<run名>.log
-```
+---
 
-可覆盖：
+## 4. 阶段二：CTE 训练
 
-```bash
-STEPS=2000 SAVE_EVERY=200 BATCH_SIZE=16 tools/run-cte-train.sh start cte-v1-20260921
-```
+训练 `CausalTransitionEncoder`——一个 9.49M 参数的小网络，把「视觉变化 + 动作」压成
+描述因果后果的码。**它不依赖策略，可以和阶段一并发跑。**
 
-跑起来的日志长这样（实跑数据，`STEPS=2`）：
+### 前置：VAE latent 缓存
 
-```
-[17:32:22] cache=... window_latents=17 train_windows=9748 val_windows=519 params=9.49M device=cuda
-[17:32:25] step 1/2  total=2.8892 action=0.9105 vision=0.3574 task=1.9463 phase=0.0035 effect=4.9270 (contrast=3.843 var=0.975)  3.04s/step
-[17:33:18]   saved cte_step_000001.pt  val_total=2.4906
-[17:34:12]   saved cte_step_000002.pt  val_total=2.2741
-[17:34:12] done. final checkpoint: .../cte_step_000002.pt
-```
-
-**速度**：约 **3.0 秒/步**（batch=8），每次存检查点要顺带跑一遍验证集（约 55 秒）。
-默认 `STEPS=500 SAVE_EVERY=100` 大约 **30 分钟**跑完，产物约 200 MB。
-
-健康信号：`val_total` 逐次下降；`effect_contrastive`、`effect_align` 逐次下降。
-
-> ⚠️ `effect_variance` 是**损失项**（VICReg 方差项 `relu(1-std).mean()`），
-> **目标是 0**（std ≥ 1 时归零），不是"越大越好"。实测 500 步稳定在 0.958，
-> 意味着 effect 表示每个维度的 std 只有约 0.04～0.08——**这一项没被优化动**。
-> 详见下面"CTE 500 步实测结论"。
-
-#### 前置条件：VAE latent 缓存（**已就绪，通常不用管**）
-
-缓存已经编码完成并落在共享盘上：
-
-```
-datasets/xhand_cte_cache/episode_XXXXXX.npz   # 101 个，共 608 MB
-datasets/xhand_cte_cache/manifest.json
-```
-
-编码是最贵的一步（要跑 VAE），**只做一次**。只有在缓存缺失或想换分辨率的
-情况下才需要重跑；在已有缓存上重复执行不会重算，已编码的 episode 会跳过：
+编码是最贵的一步，只做一次：
 
 ```bash
 source env.sh && cd cosmos-framework
@@ -275,263 +266,125 @@ PYTHONPATH=. python -m cosmos_framework.zeva_training.vae_cache \
   --output "$ZEVA_WORK/datasets/xhand_cte_cache"
 ```
 
-> ⚠️ **编码会显著抢占 GPU**（实测让 policy 训练的迭代从 3.5s 掉到 7s）。
-> 建议等第一阶段训练跑完再编码；两者也可以并发，但都要变慢。
+101 episodes → 11,883 latent 帧，608 MB，约 30 分钟。**可断点续跑**，已编码的会跳过。
 
-manifest 与磁盘上的 npz 不一致时（例如编码被中途 `kill` 过），不需要 GPU 即可修复：
+> ⚠️ 编码会显著抢占 GPU（实测让策略训练的迭代从 3.5s 掉到 7s）。
+> manifest 与磁盘不一致时（例如中途被 `kill`），加 `--rebuild-manifest` 免 GPU 修复。
 
-```bash
-source env.sh && cd cosmos-framework
-PYTHONPATH=. python -m cosmos_framework.zeva_training.vae_cache \
-  --rebuild-manifest --output "$ZEVA_WORK/datasets/xhand_cte_cache" \
-  --vae-path "$WAN_VAE_PATH" --dataset-root "$XHAND_DATA_ROOT"
-```
-
-### 两阶段通用
-
-**脱离终端**：脚本用 `setsid` + `nohup` 启动，实测进程 `PPID=1`、独立 `SID`、
-`TT=?`（无控制终端）。关窗口、断 SSH、退出 Claude Code 都不影响。
-
-**日志**：`logs/<run名>.log`。同名续训会**追加**到同一份日志，每次启动写入一行
-会话分隔头（含时间戳和参数），所以一个 run 的完整历史都在一个文件里。
-
-### 续训原理（两阶段通用）
-
-**同名即续训，换名即新 run。** 两个阶段各自实现：
-
-- **policy**：框架内建自动续训（`cosmos_framework/utils/checkpointer.py:174-182`）——
-  每次加载先找 run 目录下的 `checkpoints/latest_checkpoint.txt`，找到就自动恢复
-  **模型 + 优化器 + 调度器 + 迭代数**；找不到才用 `BASE_CHECKPOINT_PATH` 做基座初始化。
-  run 名通过 `job.name=` 覆盖传给训练（`train.py:282` 的 trailing overrides 在 TOML
-  之后应用，所以优先）。已实测：检查点正确落到对应名字的目录，迭代计数接着走。
-- **CTE**：`train_cte.py` 自己读 `<run目录>/cte_latest.pt`（含模型+优化器+step），
-  脚本固定传 `--resume`，文件不存在就从头开始。
-
-> 顺带一提：policy 训练即使 `save_iter` 设得很大，**正常结束时框架仍会存一次最终检查点**。
-
-### 检查点间隔怎么定
-
-| | policy | CTE |
-|---|---|---|
-| 参数 | `SAVE_ITER` 默认 **500** | `SAVE_EVERY` 默认 **100** |
-| 单个检查点 | **137 GB**（`model/` 85G + `optim/` 53G）| **39 MB**（+110MB 的 latest 含优化器）|
-| 存档耗时 | 约 2 分钟 | < 1 秒 |
-| 单步耗时 | 约 4 秒（batch 16，8 卡）| 约 0.6 秒（batch 8）|
-
-**policy 用 500**：每 ~33 分钟存一次，5000 步共 10 个 / 1.37 TB，崩溃最多丢 33 分钟。
-不建议更密——每次存档会**暂停训练约 2 分钟**，500 以下收益递减。
-
-**CTE 用 100**：检查点小、存档几乎无开销，可以存得很密。500 步总共才 20 MB。
-
-磁盘充裕（131 TB 可用）时按默认即可。**长跑时注意 policy 检查点会累积，框架没有自动清理。**
-
-### 磁盘现状
-
-`runs/zeva/action_xhand/` 目前是**空的**——调试产生的检查点已清理。可以直接开始正式训练。
-
-> 如果中途想丢弃某个 run 重训：`tools/run-xhand-train.sh fresh <名>` 会把它改名归档
-> （不是删除），确认无用后再用 `rm <名>` 删掉。
-
-### 跑通过程中修掉的几个阻塞
-
-**1. dataloader 死锁（NFS 并发读）**
-
-官方 DROID recipe 默认 `num_workers=16`，注释写着 "assumes data on local disk"。
-我们的数据在共享 NFS 上，16 × 8 rank = **128 个并发读进程**会把个别读请求拖死，
-表现为**某一个 rank 永远不报 dataloader ready**，其余 7 个 rank 在 pre-warm barrier
-上无限等待（CPU 几乎为 0，纯粹在等）。
-
-已在 experiment 配置里改成 `num_workers=4` / `prefetch_factor=1`。
-GPU 利用率偏低时可往上调（`-- dataloader_train.dataloader.num_workers=8`）。
-
-**2. zeva overlay 的版本不匹配（已打补丁）**
-
-```
-TypeError: compute_flow_matching_loss() got an unexpected keyword argument 'sample_weights'
-```
-
-`omni_mot_model.py` 被 overlay 加了 379 行、引入了 `sample_weights` 管道，
-但 `flow_matching.py` **没被 overlay 改过**、签名里没有这个参数。
-
-根因：zeva 的 `RELEASE_INFO.json` 写 `source_base_commit: db7d5194`，
-而 `Zeva/README.md` 让你 checkout `ee58e414`——**两个 commit 的 `flow_matching.py`
-不一样，且 `db7d5194` 在公开仓库里不存在**。也就是说这份 release 按它自己的
-说明走是训不起来的（`compute_teacher_anchor_loss` 同样被调用但全仓库无定义，
-只是它躲在默认关闭的开关后面）。
-
-补丁：给 `compute_flow_matching_loss` 加了带默认值的 `sample_weights` 参数。
-**对复现无影响**——`r3_event_weighted` 默认 False（`model_config.py:258`），
-传进去的值恒为 `None`，新加的 `if` 分支被跳过，数值路径逐位相同。
-已用"权重全 1 应等于不加权"的单测验证过这一点。
-
-**3. CTE 数据集窗口越界（自己写的数据层，2026-09-21 修）**
-
-```
-RuntimeError: episode_000018.npz: window [111,128) does not fit in 127 latents
-```
-
-`cte_dataset` 把窗口起点上界写成了**动作**约束（`length//4 - T + 1`），
-但真正的约束是**latent**约束（`t_lat - T`）。当 `length % 4 == 0` 时
-`t_lat == length//4`，动作约束比 latent 约束**大 1**，于是最后一个窗口会
-要求一段不存在的 latent。101 个 episode 里有 **26 个**踩中。
-
-之所以训练时没报、只在验证时报：那 26 个在 train/val 里的分布是随机的，
-第一次冒烟测试正好在 val 上撞到。现在两个约束都取 `min`，
-并逐窗口校验过 train/val/full 三个 split（越界 0，所有 episode 的末窗都能取到）。
-
-副作用：窗口数从 9772 变成 9748（train）、521 变成 519（val）——
-删掉的正是那些本来就不该存在的越界窗口。
-
-**4. multiprocessing 在 NFS 上留垃圾目录（已规避）**
-
-训练正常跑完之后会多打一段 traceback：
-
-```
-OSError: [Errno 16] Device or resource busy: '.../tmp/pymp-p9t8oraf'
-```
-
-`env.sh` 把 `TMPDIR` 指向共享 NFS，而 multiprocessing 的 resource_tracker
-在退出时删不掉自己放在 `$TMPDIR/pymp-*` 里的 socket，于是每次运行留一个目录
-（已经攒了 536 个）。**不影响训练结果**，但看着像崩了。
-
-`run-cte-train.sh` 里已经在 `source env.sh` 之后把 `TMPDIR` 改回本机 `/tmp`。
-CTE 不需要大临时空间，policy 那条路径没动（它可能真的需要大 TMPDIR）。
-
-### 已知无害噪音
-
-训练结束时会刷一批 `OSError: [Errno 16] Device or resource busy:
-tmp/pymp-*` —— 这是 multiprocessing 的 resource tracker 在 **NFS 上**清理
-临时文件失败。发生在训练完成之后，不影响结果（退出码 0）。
-要消除的话把 `TMPDIR` 指到本地盘（非 NFS）即可。
-
-### 磁盘规划
-
-**单个检查点 137 GB**（`model/` 85G + `optim/` 53G）。
-`save_iter=500` 即每 500 步 137 GB；5000 步的 run 约 1.4 TB。
-当前 131 TB 可用，够用，但长跑时注意别把检查点留太多。
-
-## 7. 代码改动清单
-
-新增/修改的文件：
-
-| 文件 | 作用 |
-| --- | --- |
-| `data/.../datasets/xhand_lerobot_dataset.py` | UR7e+XHand 的 LeRobot 加载器（新增） |
-| `data/.../datasets/action_sft_dataset.py` | 加 `get_action_xhand_sft_dataset` 工厂 |
-| `configs/.../posttrain_config/action_policy_xhand_nano.py` | 新 experiment 配置 |
-| `examples/toml/sft_config/action_policy_xhand_nano.toml` | 运行配置 |
-| `examples/launch_sft_action_policy_xhand_nano.sh` | launcher |
-| `tools/run-xhand-train.sh` | 第一阶段（policy）训练管理脚本（新增） |
-| `zeva_training/probe_vae.py` | VAE latent 几何探针（新增） |
-| `zeva_training/vae_cache.py` | VAE 批量编码 + latent 缓存（新增） |
-| `zeva_training/cte_dataset.py` | CTE 训练窗口（新增） |
-| `zeva_training/train_cte.py` | CTE 训练循环（新增） |
-| `tools/run-cte-train.sh` | 第二阶段（CTE）训练管理脚本（新增） |
-| `model/generator/algorithm/loss/flow_matching.py` | 加 `sample_weights` 参数（修 release 缺陷）|
-| `model/generator/omni_mot_model.py` | overlay 自带，未再改 |
-| `data/generator/action/domain_utils.py` | 注册 `ur7e-xhand`（domain 23）|
-
-两个关键设计点：
-
-1. **`keys_to_skip_loading = ["net_ema."]`** —— 不从裸 Cosmos3-Nano 起训，
-   而是从后训练过的 policy 起，所以**保留它的 action heads**。
-   直接抄 DROID recipe 的 skip 列表会静默丢弃这些权重。
-2. **domain id 23 是全新槽位** —— `action2llm` / `llm2action` /
-   `action_modality_embed` 里属于它的行没被任何已发布权重训过，必须保持可训练。
-
-另有 `scripts/action_policy_server_xhand.py`（真机 server，见下一节）。
-
-## 8. 真机部署（对齐 TactileTTT 客户端）
-
-新增 `scripts/action_policy_server_xhand.py`，让 **TactileTTT 的机器人客户端零代码改动**即可对接。
-
-**为什么能零改动**：两边传输层是同一个——都是 openpi 的 `WebsocketPolicyServer`（websocket + msgpack）。
-而且客户端是**数据驱动**的：它从数据集 `meta/info.json` 读 `action.names` / `state.names` / 相机名，
-按名字发观测（`observation/<camera>_image`）、按名字解析动作（`resp["actions"]`，形状 `[T, len(action.names)]`）。
-所以 18 维关节位置和 `cam_front/left/right` 都是自动适配的。
-
-服务端做了三件 RoboCasa server 没做的事：
-
-1. **视图合成** —— 客户端分开发三路相机，训练时喂给策略的是 `left | wrist` 横向拼接
-   （`wrist = cam_front`，因为源数据没有腕部相机）。服务端复刻
-   `XHandLeRobotDataset._compose_video` 的几何。
-2. **动作反归一化** —— 训练用了 `minmax` 归一化，而**真实关节范围不是 ±1**
-   （如 `arm_joint_1 ∈ [-2.124, -1.477]`）。RoboCasa 的 arm7 通道恰好是 ±1，
-   它的 server 才能跳过反归一化；照抄会让机器人收到 0.3 这种归一化值当弧度执行。
-   已用真实统计数据验证：服务端与训练侧的 normalizer 逐位一致，往返误差 7e-08。
-3. **服务端 CTE 历史重建** —— Zeva 需要每 4 个控制步一帧 + 对应的 4 步已执行动作。
-   客户端一次 infer 执行一个 chunk，所以让它用 `--query-frequency 4` 启动
-   （**只是命令行参数**），服务端即可自行重建历史。动作归属规则见 `_BoundaryBuffer`：
-   请求 *t+1* 到达时，*t* 时刻返回的 chunk 就是帧 *t*→*t+1* 之间的转移。
-   已用 8 个单测钉住（含丢包自愈、窗口滚动、与训练侧 proprio 索引一致性）。
-
-**已知假设**：重建假设机器人原样按序执行了服务端返回的动作。若客户端有动作限幅/丢弃逻辑，
-重建的转移会与物理实际不符——那时应改为由客户端发送历史（它已经为触觉状态做了同样的事：
-`StateHistoryBuffer`）。
-
-### 8.1 部署基础策略（纯 VLA，无 Zeva）—— 现在就能用
-
-部署第一阶段训出的检查点。**这是纯模仿学习策略**：视觉 + 指令 → 动作，
-不含任何 Zeva 记忆机制。
-
-判断依据（三条都确认过）：`ZevaPolicyConfig.enabled` 默认 `False`
-（`model_config.py:118-126`，文档明说 "disabled by default, preserving every existing
-Cosmos recipe"）；我们的训练配置实际生效值也是 `False`；未传 `--cte-checkpoint` 时
-服务端置 `_zeva_enabled = False`（`server:601`）。
-
-**实证**：这个检查点的 `net.*` 里**没有** `behavior_pbd` / `behavior_adapter` /
-`behavior_global_projector` —— 模块压根没被构造，所以权重里也不会有。
+### 启动
 
 ```bash
-cd $ZEVA_WORK/cosmos-framework
-source $ZEVA_WORK/env.sh
-
-CUDA_VISIBLE_DEVICES=0 PYTHONPATH=. \
-python -m cosmos_framework.scripts.action_policy_server_xhand \
-  --checkpoint-path "$ZEVA_WORK/runs/zeva/action_xhand/v1-20260921/checkpoints/iter_000003000" \
-  --allow-dcp-checkpoint \
-  --experiment action_policy_xhand_nano \
-  --experiment-overrides "model.config.tokenizer.vae_path=$WAN_VAE_PATH" \
-  --action-stats-path "$XHAND_ACTION_STATS_PATH" \
-  --domain-name ur7e-xhand \
-  --resolution 256 \
-  --action-dim 18 \
-  --conditioning-fps 15 \
-  --proprio-dim 22 \
-  --image-height 256 --image-width 512 \
-  --action-chunk-size 32 \
-  --num-steps 30 --guidance 3.0 --shift 5.0 \
-  --host 0.0.0.0 --port 8990
+cd $ZEVA_WORK
+tools/run-cte-train.sh start cte-v2-20260921     # 同名即续训
 ```
 
-日志出现 `ready` 即加载完成。
+产物：
 
-**⚠️ 下面四个参数不覆盖就一定错**——服务端默认是 RoboCasa/DROID 的配置：
+```
+runs/zeva_cte/<run名>/cte_step_XXXXXX.pt   # 39 MB，推理端可直接加载
+runs/zeva_cte/<run名>/cte_latest.pt        # 含优化器状态，供续训
+logs/<run名>.log
+```
 
-| 参数 | 服务端默认 | 必须设为 | 原因 |
-| --- | --- | --- | --- |
-| `--resolution` | `480` | **256** | 我们训练用的 tier 256 |
-| `--action-dim` | `7` | **18** | UR7e + XHand 是 18 维关节位置 |
-| `--proprio-dim` | `9` | **22** | 对应 `state_mode=arm22` |
-| `--conditioning-fps` | `20` | **15** | 数据是 15 fps |
-
-**⚠️ 显存**：训练在跑时每卡已占 ~42GB/80GB，服务端还要 ~30GB，可能 OOM。
-建议等训练结束后再起服务端。
-
-**⚠️ 先小幅试跑**：训练没有验证集，action loss 低到 0.0012 有过拟合嫌疑
-（数据集仅 98 个训练 episode）。上真机时先小幅度验证，别直接全量操作。
-
-后台运行（关窗不断）：
+### 可调参数
 
 ```bash
-mkdir -p $ZEVA_WORK/logs
-cd $ZEVA_WORK/cosmos-framework
-source $ZEVA_WORK/env.sh
+STEPS=3000 SAVE_EVERY=500 BATCH_SIZE=8 tools/run-cte-train.sh start cte-v2-20260921
+```
 
-setsid nohup env CUDA_VISIBLE_DEVICES=0 PYTHONPATH=. \
-  $ZEVA_WORK/envs/zeva/bin/python \
+| 变量 | 默认 | 说明 |
+|---|---:|---|
+| `STEPS` | 500 | 训练步数（同 run 名续训时填新的总步数）|
+| `SAVE_EVERY` | 100 | 检查点间隔。**每次存档顺带跑一遍完整验证集（约 55 秒）**，长跑要调大 |
+| `BATCH_SIZE` | 8 | |
+| `CTE_LR` | 1e-4 | |
+| `CTE_WINDOW_LATENTS` | 17 | 窗口长度。**改了必须同步服务端的 `_CTE_MAX_BOUNDARY_FRAMES`** |
+| `CTE_NUM_WORKERS` | 4 | NFS 上别调高（见 8.1）|
+
+### 判读日志
+
+```
+step 3000/3000  total=0.3727 action=0.0074 vision=0.0021 task=0.0000
+                phase=0.0011 effect=1.4524 (contrast=0.507 var=0.938)
+```
+
+约 **0.2~3 秒/步**，3000 步约 15 分钟。
+
+---
+
+## 5. 阶段三：特征缓存与注入训练
+
+把 CTE 的输出变成策略能吃的 `behavior_*` 张量，然后冻结策略、只训 Zeva 模块。
+**这三步是整个 release 里完全缺失的那条链路。**
+
+### 5.1 CTE 特征缓存
+
+```bash
+cd $ZEVA_WORK/cosmos-framework && source $ZEVA_WORK/env.sh
+PYTHONPATH=. python -m cosmos_framework.zeva_training.cte_features \
+  --cte-checkpoint "$ZEVA_WORK/runs/zeva_cte/cte-v2-20260921/cte_step_003000.pt" \
+  --latent-cache   "$ZEVA_WORK/datasets/xhand_cte_cache" \
+  --output         "$ZEVA_WORK/datasets/xhand_cte_features"
+```
+
+约 2.5 分钟，产物 5.5 MB。每个 boundary（每 4 个原始控制步）存一行 `phase[128]` +
+最近 4 个 `effect_post[4,128]`（右对齐）+ valid。
+
+### 5.2 task-context bank
+
+```bash
+PYTHONPATH=. python -m cosmos_framework.zeva_training.build_task_context_bank \
+  --feature-cache "$ZEVA_WORK/datasets/xhand_cte_features" \
+  --output        "$ZEVA_WORK/datasets/xhand_task_context_bank.pt" --check
+```
+
+`--check` 会重新加载并断言 bank 里的 256 维向量与训练时 wrapper 产出的**完全一致**——
+这是 train/serve 一致性的唯一保证。
+
+### 5.3 注入训练
+
+```bash
+cd $ZEVA_WORK
+STAGE2_POLICY_CHECKPOINT="$ZEVA_WORK/runs/zeva/action_xhand/v1-20260921/checkpoints/iter_000004000" \
+ZEVA_FEATURE_CACHE="$ZEVA_WORK/datasets/xhand_cte_features" \
+  tools/run-xhand-zeva-train.sh start
+```
+
+> ⚠️ `STAGE2_POLICY_CHECKPOINT` 要指向 **`iter_XXXXXXXX` 目录本身**，不是 `checkpoints/`。
+> DCP loader 会自己往后拼 `model/`。
+
+| 变量 | 默认 | 说明 |
+|---|---:|---|
+| `MAX_ITER` | 2000 | 训练步数 |
+| `SAVE_ITER` | 500 | 检查点间隔（同样 137 GB/个，即使只训了几个小模块）|
+
+产物：`runs/zeva/zeva_xhand/action_policy_xhand_zeva/checkpoints/iter_XXXXXXXX/`
+
+### 判读日志
+
+```
+behavior_prior_nll = 2.203 → 1.008 → … → 0.906    (iter 0→10)
+```
+
+`behavior_prior_nll`（权重 0.01）是**整个 Zeva 里唯一直接监督"记忆有没有用"的地方**：
+看着记忆猜接下来该怎么动，猜得准不准就是它。
+
+---
+
+## 6. 部署
+
+服务端是 `cosmos_framework.scripts.action_policy_server_xhand`，走 openpi 的
+websocket + msgpack 协议，**TactileTTT 现有客户端零代码改动可对接**。
+
+### 6.1 方式一：纯 VLA 基础策略
+
+不需要任何 Zeva 产物，用阶段一的检查点即可。
+
+```bash
+cd $ZEVA_WORK/cosmos-framework && source $ZEVA_WORK/env.sh
+CUDA_VISIBLE_DEVICES=0 PYTHONPATH=. $ZEVA_WORK/envs/zeva/bin/python \
   -m cosmos_framework.scripts.action_policy_server_xhand \
-  --checkpoint-path "$ZEVA_WORK/runs/zeva/action_xhand/v1-20260921/checkpoints/iter_000003000" \
+  --checkpoint-path "$ZEVA_WORK/runs/zeva/action_xhand/v1-20260921/checkpoints/iter_000004000" \
   --allow-dcp-checkpoint \
   --experiment action_policy_xhand_nano \
   --experiment-overrides "model.config.tokenizer.vae_path=$WAN_VAE_PATH" \
@@ -540,70 +393,224 @@ setsid nohup env CUDA_VISIBLE_DEVICES=0 PYTHONPATH=. \
   --resolution 256 --action-dim 18 --conditioning-fps 15 --proprio-dim 22 \
   --image-height 256 --image-width 512 --action-chunk-size 32 \
   --num-steps 30 --guidance 3.0 --shift 5.0 \
-  --host 0.0.0.0 --port 8990 \
-  > $ZEVA_WORK/logs/xhand-server.log 2>&1 < /dev/null &
-```
-
-机器人侧**不改代码**，只加参数（`--query-frequency 4` 是 Zeva 阶段服务端重建
-CTE 历史所必需的；纯策略部署时保留也无害）：
-
-```bash
-python TactileTTT_client_multi.py --server-port 8990 --query-frequency 4 ...
-```
-
-### 8.2 部署完整 Zeva（待 Phase 2/3 完成）
-
-需要额外两个产物——训好的 CTE 和 task-context bank——再加上 `--pim-enabled`。
-**现在还不能用**（CTE 未训、bank 未构建）：
-
-```bash
-PYTHONPATH=. python -m cosmos_framework.scripts.action_policy_server_xhand \
-  --checkpoint-path "<冻结阶段训出的 DCP>" --allow-dcp-checkpoint \
-  --experiment action_policy_xhand_zeva \
-  --experiment-overrides model.config.tokenizer.vae_path="$WAN_VAE_PATH" \
-  --action-stats-path "$XHAND_ACTION_STATS_PATH" \
-  --domain-name ur7e-xhand \
-  --resolution 256 --action-dim 18 --conditioning-fps 15 --proprio-dim 22 \
-  --cte-checkpoint "<训好的 cte_step_XXXXXX.pt>" \
-  --task-context-bank "<构建好的 bank>" \
   --host 0.0.0.0 --port 8990
 ```
 
-> 注意：现在这个纯策略检查点里**没有** `behavior_*` 模块，所以不能"接着训"它们。
-> 完整 Zeva 需要新建一个 `behavior_stage2.enabled=True` 的配置——模块会以
-> **零初始化**构造（保证注入后逐位等于原策略），冻结 policy 后只训这些模块。
+### 6.2 方式二：完整 Zeva（CTE + bank + stage2）
 
-## 9. Zeva 三阶段训练的现状
+```bash
+cd $ZEVA_WORK/cosmos-framework && source $ZEVA_WORK/env.sh
+CUDA_VISIBLE_DEVICES=0 PYTHONPATH=. $ZEVA_WORK/envs/zeva/bin/python \
+  -m cosmos_framework.scripts.action_policy_server_xhand \
+  --checkpoint-path "$ZEVA_WORK/runs/zeva/zeva_xhand/action_policy_xhand_zeva/checkpoints/iter_000001000" \
+  --allow-dcp-checkpoint \
+  --experiment action_policy_xhand_zeva \
+  --experiment-overrides "model.config.tokenizer.vae_path=$WAN_VAE_PATH" \
+  --action-stats-path "$XHAND_ACTION_STATS_PATH" \
+  --domain-name ur7e-xhand \
+  --resolution 256 --action-dim 18 --conditioning-fps 15 --proprio-dim 22 \
+  --image-height 256 --image-width 512 --action-chunk-size 32 --history-length 1 \
+  --num-steps 30 --guidance 3.0 --shift 5.0 \
+  --cte-checkpoint "$ZEVA_WORK/runs/zeva_cte/cte-v2-20260921/cte_step_003000.pt" \
+  --task-context-bank "$ZEVA_WORK/datasets/xhand_task_context_bank.pt" \
+  --task-context-instruction PressButton4Times \
+  --host 0.0.0.0 --port 8990
+```
 
-**这份 release 是推理 release，不含 Zeva 自身的训练代码。** 已查证：
+日志出现 `[robolab-policy-server] ready` 即可接客户端。
 
-- `causal_transition_encoder_loss` 全仓库唯一调用点是单测
-- `bidirectional_supervised_contrastive_loss` 零调用点
-- 模型训练需要的 `behavior_global/phase/effect/effect_valid` 四个张量，
-  在全仓库 `data/**` 里零产出——消费它们的 wrapper 不在快照内
-- 四个 zeva experiment 配置的 `dataloader_train` 全是 `None`
+> **`--task-context-instruction` 和 `--static-task-context-checkpoint` 必须二选一**
+> （服务端强制）。单任务走前者；多任务时训好 stage3 head 后改用后者。
 
-要在自有数据上复现 Zeva，需要自己补：CTE 训练循环、CTE feature cache 构建、
-task-context bank 构建、stage3 retrieval head 训练、PIM training bank 构建，
-以及上面那个 `behavior_*` 数据集包装层。完整方案见
-`~/.claude-cli/.claude/plans/vectorized-floating-zephyr.md`。
+### 6.3 方式三：消融（同一份检查点，开关切换）
 
-## 10. 下一步
+Zeva 的核心主张是"跨尝试的因果记忆有效"。验证它只需在同一次部署里改开关：
 
-按计划文件（`~/.claude-cli/.claude/plans/vectorized-floating-zephyr.md`）的分阶段顺序：
+| 开关 | 作用 |
+|---|---|
+| `--disable-policy-injection` | 置零 policy adapter 和 task-context projector（等价于注入被关）|
+| `--bit-mode zero` | effect 历史清零，但保留时间可用性（掩码不变）|
+| `--bit-mode shuffled` | 反转已完成的 effect 槽位，保留右对齐的因果位置 |
 
-- ✅ **Phase 1 — base policy 微调**：代码 + 训练链路全部跑通（第 6 节）。
-  **下一步就是跑正式训练**（`tools/run-xhand-train.sh`），拿到一个能用在自己任务上的 policy。
-- ✅ **Phase 2 — CTE 训练**：代码全部完成并实测（第 6 节第二阶段）。
-  - 探针实测确认 `image_channels=48`（预期值正确）、时间压缩 `1+(T-1)//4`
-  - VAE 缓存已编码 85/101 个 episode（可断点续跑）
-  - CTE 训练循环跑通，检查点通过推理端加载路径的验收
-  - 待办：把剩余 16 个 episode 编码完，然后正式训练 CTE
-- ⬜ **Phase 3~5 — 中间产物 + 数据契约层 + stage2 注入训练**。
-  最大不确定性是 `behavior_value`（256 维）的生成方式，需要看论文。
-  注意：模型训练需要的 `behavior_global/phase/effect/effect_valid` 四个张量
-  **全仓库 `data/**` 里零产出**，消费它们的 wrapper 不在快照内，必须自己写。
-- ⬜ **Phase 6~7 — 真机部署与消融**：server 已写好（第 8 节），
-  还差真机客户端联调，然后做 PIM 开/关消融。
+**PIM（跨尝试记忆）的开关尚未实现**——`behavior_pim_*` 模块本身在 release 里存在，
+但训练与部署链路都还没接（见 9）。
 
-**现在能做的**：直接跑 Phase 1 的正式训练。训练数据、权重、脚本、日志、续训全部就位。
+> ⚠️ `--bit-mode` 和服务端的 `disable_policy_injection` 都是**诊断用途**，
+> 不要用在正式跑批里。
+
+### 6.4 部署前验证
+
+一条命令验证整条服务链路（启动服务端 → 走真实协议发请求 → 断言 CTE 路径活着）：
+
+```bash
+cd $ZEVA_WORK/cosmos-framework && source $ZEVA_WORK/env.sh
+CUDA_VISIBLE_DEVICES=0 PYTHONPATH=. python -m cosmos_framework.zeva_training.verify_serving \
+  --checkpoint "$ZEVA_WORK/runs/zeva/zeva_xhand/action_policy_xhand_zeva/checkpoints/iter_000001000" \
+  --cte-checkpoint "$ZEVA_WORK/runs/zeva_cte/cte-v2-20260921/cte_step_003000.pt" \
+  --task-context-bank "$ZEVA_WORK/datasets/xhand_task_context_bank.pt" \
+  --task-context-instruction PressButton4Times
+```
+
+期望输出：
+
+```
+server ready
+  request 0: actions (31, 18) range [-2.915, +3.005]
+  ...
+boundary_frames per request: [1, 2, 3, 4, 5, 6]
+action shapes:               [(31, 18) × 6]
+
+✅ 服务端加载 stage2 检查点、协议返回 (31, 18)、CTE 路径活跃
+```
+
+**`boundary_frames` 递增这一条最关键**：服务端在边界缓冲建不起来时会**静默回退**
+到全零特征，客户端拿到的动作看起来完全正常。只有查这个计数才能确认特征是真的。
+
+---
+
+## 7. 可调参数速查表
+
+### 训练步数
+
+| 阶段 | 参数 | 默认 | 实测耗时 | 建议 |
+|---|---|---:|---|---|
+| 一 | `MAX_ITER` | 5000 | 约 4~6 秒/步 | 5000 起；曲线还在降就加倍 |
+| 二 | `STEPS` | 500 | 约 0.2~3 秒/步 | 3000（15 分钟，很便宜）|
+| 三 | `MAX_ITER` | 2000 | 约 6 秒/步 | 2000；`behavior_prior_nll` 变负就该停 |
+
+### 检查点间隔
+
+| 阶段 | 参数 | 默认 | 单个大小 | 存档耗时 |
+|---|---|---:|---:|---|
+| 一 | `SAVE_ITER` | 500 | 137 GB | 约 2 分钟 |
+| 二 | `SAVE_EVERY` | 100 | 39 MB | < 1 秒 + 55 秒验证 |
+| 三 | `SAVE_ITER` | 500 | 137 GB | 约 2 分钟 |
+
+> 阶段一和三的检查点是 DCP **全量存**——即使阶段三只训了三个小模块，也还是 137 GB/个。
+> 跑满会迅速吃掉几 TB：阶段一 5000 步 = 1.37 TB，阶段三 2000 步 = 550 GB。
+
+### 学习率
+
+| 阶段 | 位置 | 值 |
+|---|---|---:|
+| 一 | `examples/toml/sft_config/action_policy_xhand_nano.toml` → `[optimizer] lr` | 2e-4 |
+| 二 | `CTE_LR` 环境变量 | 1e-4 |
+| 三 | TOML `[optimizer] lr` + 配置里的 `lr_multipliers`（Zeva 模块 ×5）| 2e-4 |
+
+### 其他常用覆盖
+
+```bash
+# 阶段一/三：透传任意 Hydra 覆盖
+EXTRA_OVERRIDES="optimizer.lr=1e-4 dataloader_train.max_samples_per_batch=8" \
+  tools/run-xhand-train.sh start v1-20260921
+
+# 阶段一：NFS 上 num_workers 别超过 4（见 8.1）
+EXTRA_OVERRIDES="dataloader_train.dataloader.num_workers=8" ...
+
+# 阶段三：用字符串传覆盖（bash 数组不会导出到子进程，见 8.2）
+ZEVA_TAIL_OVERRIDES="trainer.max_iter=5 checkpoint.save_iter=5" \
+  bash examples/launch_sft_action_policy_xhand_zeva.sh
+```
+
+---
+
+## 8. 已知问题
+
+### 8.1 NFS 上的 dataloader 死锁
+
+官方配方默认 `num_workers=16`（注释写着 "assumes data on local disk"）。
+我们的数据在共享 NFS 上，16 × 8 rank = **128 个并发读**会把个别读请求拖死。
+症状很隐蔽：**某一个 rank 永远不报 dataloader ready**，其余 7 个卡在 pre-warm barrier，
+CPU 几乎为 0、GPU 100%、无任何报错。
+
+已改成 `num_workers=4` / `prefetch_factor=1`。GPU 利用率低时可往上调到 8。
+
+### 8.2 `stop` 不存检查点
+
+`termination_signal_checkpoint` 回调**只处理 SIGUSR1**，且靠 Slurm 哨兵文件
+`$SLURM_LOG_DIR/SIGUSR1_RECEIVED` 触发；本机没有 Slurm，回调初始化时就把哨兵路径
+置空直接 return，它注册的 SIGTERM 处理器**只打一行日志**。
+
+**所以 `stop` 等于直接杀进程，从上一次定期存档之后的进度全丢。**
+想不丢进度就别 stop，让它跑到下一个 `SAVE_ITER`。
+
+### 8.3 代理会劫持 localhost 的 websocket
+
+本机全局设了 `http_proxy`/`https_proxy` 且没有 `no_proxy`，`websockets` 会把
+`127.0.0.1` 的连接也走代理并收到 403。客户端需要 `no_proxy=127.0.0.1,localhost`
+（`verify_serving.py` 里已自动设置；真机客户端若也配了代理需自己加）。
+
+### 8.4 CTE 的任务聚类目标是死目标
+
+101 个 episode 的 `task_cluster` 全是同一个，`semantic_ids` 恒为 0。
+多正样本对比损失在这种情况下**每个样本都是其它所有样本的正样本**，
+理论下界是 `log(N-1)`，唯一的下降方向是把所有 embedding 压成一个方向。
+
+已修（`cte_losses.py`：batch 内语义 id 少于 2 个时返回 0，不产生梯度）。
+**多任务数据不受影响**——分支只在少于两个不同 id 时触发。
+
+### 8.5 `effect_post` 方向坍缩（未修）
+
+实测第 3000 步的跨窗口平均余弦：
+
+| 张量 | 角色 | cos | 有效秩 |
+|---|---|---:|---:|
+| `effect_delta_target` | 输入（冻结 VAE 视觉差分）| **−0.000** | 31.3 |
+| `effect_outcome_post` | **被 NCE 训练的那侧** | **+0.115** | 26.1 |
+| `effect_post` | **服务端实际注入的** | **+0.829** | 19.1 |
+
+输入侧是健康的，所以这是**目标函数问题不是数据问题**：判别性表示确实学出来了，
+但不在被注入的那个张量上。而且训得越久注入端越塌（500 步 0.963 → 3000 步 0.980）。
+
+release 代码里作者自己记过同类问题（`causal_transition_encoder.py:229-230`），
+说明这个头本身是脆的。
+
+---
+
+## 9. 现状与局限
+
+### 各阶段状态
+
+| 阶段 | 状态 | 产物 |
+|---|---|---|
+| 一：策略微调 | 训到 iter 4136 | `runs/zeva/action_xhand/v1-20260921/checkpoints/iter_000004000` |
+| 二：CTE | 3000 步 | `runs/zeva_cte/cte-v2-20260921/cte_step_003000.pt` |
+| 三：特征缓存 | 101 episodes / 11,883 boundary | `datasets/xhand_cte_features/` |
+| 三：bank | 1 entry | `datasets/xhand_task_context_bank.pt` |
+| 三：注入训练 | 训到 iter 1160 | `runs/zeva/zeva_xhand/action_policy_xhand_zeva/checkpoints/iter_000001000` |
+| 部署 | **已验证** | 见 6.4 |
+
+### 尚未实现
+
+| 东西 | 说明 |
+|---|---|
+| **PIM（跨尝试记忆）** | Zeva 的核心主张——从之前几次 attempt 检索 phase/effect 合成 Causal Prompt。模块在 release 里存在（`CausalPromptEncoder` / `behavior_pim_*`），但训练与部署链路都没接 |
+| **stage3 检索头** | 单任务下无意义；多任务时需要训 |
+| **触觉模态** | 见下 |
+
+### 触觉完全未被使用
+
+源数据 `observation.state[52:1972]` 是 1920 维触觉，其中 **534 个通道是活跃的**
+（时间 std > 0.1，中位数 0.774）。但它：
+
+1. 不在 `_STATE_INDICES` 的任何 state mode 里（最宽的 `full52` 只到 52）
+2. 而且整条 **proprio 路径都是关的**（`proprio_condition.enabled = False`）
+3. 相机只用了 `cam_left` + `cam_front`，`cam_right` 和三路深度也没用
+
+所以当前策略实质上是**纯 video → action**。
+
+这也部分解释了 8.5 的 `effect_post` 坍缩：Zeva 把"因果后果"定义为
+**视觉差分**（`effect_delta_target` 是冻结 VAE 对 latent 的差分投影），
+而对 `press_button_4_times` 这种接触密集型任务，纯视觉的"后果"高度雷同。
+触觉是更直接的测量。
+
+### 单任务的限制
+
+数据只有一个 task cluster，所以：
+
+- CTE 的任务聚类目标退化（8.4）
+- task-context bank 只有 1 条 entry，检索是恒等映射
+- **Zeva 主张的"跨任务检索"这条线无法验证**
+
+但**跨尝试记忆（PIM）在单任务下仍然可测**——`press_button_4_times` 本身就是
+重复尝试的任务结构，这正是该任务适合验证 Zeva 的地方。
