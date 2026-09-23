@@ -26,7 +26,7 @@
 # 环境变量:
 #   STEPS=500  SAVE_EVERY=100  BATCH_SIZE=8  RUN_NAME=xxx
 #   CTE_CACHE=<latent缓存目录>  CTE_WINDOW_LATENTS=17  CTE_NUM_WORKERS=4
-#   CTE_LR=1e-4
+#   CTE_LR=1e-4  CTE_EXTRA="--effect-diversity-weight 1"
 set -u
 
 ZEVA_WORK=${ZEVA_WORK:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}
@@ -44,6 +44,7 @@ CKPT_GLOB="cte_step_*"
 : "${CTE_WINDOW_LATENTS:=17}"
 : "${CTE_NUM_WORKERS:=4}"
 : "${CTE_LR:=1e-4}"
+: "${CTE_EXTRA:=}"
 : "${RUN_NAME:=}"
 
 mkdir -p "$LOG_DIR"
@@ -119,6 +120,7 @@ start)
       --output    '$RUN_DIR' \
       --steps $STEPS --save-every $SAVE_EVERY --batch-size $BATCH_SIZE \
       --lr $CTE_LR --window-latents $CTE_WINDOW_LATENTS --num-workers $CTE_NUM_WORKERS \
+      $CTE_EXTRA \
       --resume
   " >> "$LOG_FILE" 2>&1 < /dev/null &
   echo $! > "$PID_FILE"

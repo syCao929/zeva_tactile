@@ -110,6 +110,20 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--resume", action="store_true", help="continue from <output>/cte_latest.pt")
     ap.add_argument("--device", default="cuda")
+    # Effect-loss weights. All default to None = keep CTELossConfig's own value, so
+    # omitting them reproduces the published behaviour exactly.
+    #
+    # They exist because `effect_variance` (the VICReg term that is supposed to stop
+    # `effect_post_raw` collapsing) contributes only ~1/48 of the gradient norm that
+    # `effect_contrastive` does, so the injected code's scale sits wherever it lands
+    # instead of at the target std of 1. Measured on the 3000-step checkpoint, with
+    # every entry of each code centred: contrastive grad norm 6.64, variance 0.137.
+    ap.add_argument("--effect-diversity-weight", type=float, default=None,
+                    help="penalty on mean pairwise cosine of the injected codes; 0 = published behaviour")
+    ap.add_argument("--effect-variance-weight", type=float, default=None)
+    ap.add_argument("--effect-covariance-weight", type=float, default=None)
+    ap.add_argument("--effect-contrastive-weight", type=float, default=None)
+    ap.add_argument("--effect-align-weight", type=float, default=None)
     args = ap.parse_args()
 
     torch.manual_seed(args.seed)
@@ -162,6 +176,23 @@ def main() -> int:
     )
 
     loss_cfg = CTELossConfig()
+    for _flag, _field in (
+        (args.effect_diversity_weight, "effect_diversity_weight"),
+        (args.effect_variance_weight, "effect_variance_weight"),
+        (args.effect_covariance_weight, "effect_covariance_weight"),
+        (args.effect_contrastive_weight, "effect_contrastive_weight"),
+        (args.effect_align_weight, "effect_align_weight"),
+    ):
+        if _flag is not None:
+            setattr(loss_cfg, _field, _flag)
+    log(
+        "loss weights: " + "  ".join(
+            f"{f}={getattr(loss_cfg, f):g}"
+            for f in ("effect_contrastive_weight", "effect_diversity_weight",
+                      "effect_variance_weight", "effect_covariance_weight",
+                      "effect_align_weight")
+        )
+    )
 
     def run_batch(batch: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
         frames = batch["frames"].to(args.device, non_blocking=True)

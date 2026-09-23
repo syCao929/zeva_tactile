@@ -22,6 +22,24 @@ class CTELossConfig:
     # against rank collapse. Action reconstruction remains a weak auxiliary.
     effect_weight: float = 0.25
     effect_contrastive_weight: float = 1.0
+    # Contrastive loss applied to the *injected* effect codes themselves, not only to
+    # `effect_outcome_*`. Default 0.0 = off, so the published objective is unchanged.
+    #
+    # Why it is needed: `effect_outcome_head` is `LayerNorm -> Linear`, and LayerNorm
+    # re-normalises per sample, so the outcome-side contrastive loss can satisfy itself
+    # by amplifying microscopic differences in a near-constant `effect_post_raw`. The
+    # injected code therefore never has to become diverse. Measured on a 3000-step
+    # checkpoint (48 well-separated val windows, mean pairwise cosine):
+    #
+    #     effect_delta_target (input)      -0.000   <- healthy
+    #     effect_outcome_post (supervised) +0.115   <- diverse
+    #     effect_post         (injected)   +0.829   <- collapsed
+    #
+    # Weight sweeps do not fix it: raising effect_variance_weight to 100 moves the
+    # cosine only 0.963 -> 0.945 while dropping the effective rank 17.1 -> 5.2, and
+    # *lowering* effect_contrastive_weight makes it worse (0.990). This term supplies
+    # the missing pressure directly on the tensor the server actually injects.
+    effect_diversity_weight: float = 0.0
     effect_action_weight: float = 0.05
     effect_align_weight: float = 0.1
     effect_variance_weight: float = 1.0
@@ -95,6 +113,29 @@ def summarize_effect_window(actions: Tensor) -> Tensor:
     )
 
 
+def _effect_diversity(code: Tensor, mask: Tensor) -> Tensor:
+    """Mean pairwise cosine of the completed effect codes; minimise to spread them out.
+
+    Written as an explicit penalty because the alternatives do not work here. VICReg's
+    variance term asks for per-dimension std >= 1, which a few dominant directions can
+    satisfy without the codes becoming distinguishable (measured: raising its weight 100x
+    dropped the mean cosine only 0.963 -> 0.945 while the effective rank fell 17 -> 5.2).
+    An NCE against ``effect_delta_target`` is blocked by a dimension mismatch (128 vs 256)
+    and would need a learnable projection, reintroducing the very LayerNorm that lets the
+    outcome-side loss manufacture diversity from a near-constant input.
+
+    This term has no such escape: L2 normalisation removes scale, so the only way to lower
+    it is to actually point the codes in different directions.
+    """
+    z = code[mask]
+    if z.shape[0] < 2:
+        return code.new_zeros(())
+    z = F.normalize(z, dim=-1)
+    similarity = z @ z.T
+    off_diagonal = similarity[~torch.eye(z.shape[0], dtype=torch.bool, device=z.device)]
+    return off_diagonal.mean()
+
+
 def _effect_nce(query: Tensor, target: Tensor, mask: Tensor, temperature: float) -> Tensor:
     query, target = query[mask], target[mask]
     if query.shape[0] < 2:
@@ -145,6 +186,15 @@ def causal_transition_encoder_loss(
     effect_nce_pre = _effect_nce(outputs["effect_outcome_pre"], effect_target, effect_mask, cfg.effect_temperature)
     effect_nce_post = _effect_nce(outputs["effect_outcome_post"], effect_target, effect_mask, cfg.effect_temperature)
     effect_contrastive_loss = 0.5 * (effect_nce_pre + effect_nce_post)
+    # Same objective, but on the codes that get injected, expressed as a direct penalty
+    # on their pairwise cosine instead of an NCE. `effect_post` is 128-d while
+    # `effect_delta_target` is 256-d, so an NCE here would need a learnable projection —
+    # which is how the collapse started (see `effect_diversity_weight` above). Minimising
+    # the mean pairwise cosine has no such escape hatch: scaling cannot reduce it, only
+    # genuinely different directions can.
+    effect_div_pre = _effect_diversity(outputs["effect_pre"], effect_mask)
+    effect_div_post = _effect_diversity(outputs["effect_post"], effect_mask)
+    effect_diversity_loss = 0.5 * (effect_div_pre + effect_div_post)
     # Diagnostic only: absolute deltas have a strong zero baseline, so this
     # MSE is intentionally not optimized directly.
     effect_visual_error = F.mse_loss(outputs["effect_outcome_pre"], effect_target, reduction="none").mean(dim=-1)
@@ -159,6 +209,7 @@ def causal_transition_encoder_loss(
     effect_variance_loss, effect_covariance_loss = _vicreg(outputs["effect_post_raw"], effect_mask)
     effect_loss = (
         cfg.effect_contrastive_weight * effect_contrastive_loss
+        + cfg.effect_diversity_weight * effect_diversity_loss
         + cfg.effect_action_weight * effect_action_loss
         + cfg.effect_align_weight * effect_align_loss
         + cfg.effect_variance_weight * effect_variance_loss
@@ -179,6 +230,7 @@ def causal_transition_encoder_loss(
         "loss_phase": phase_loss,
         "loss_effect": effect_loss,
         "effect_contrastive": effect_contrastive_loss,
+        "effect_diversity": effect_diversity_loss,
         "effect_visual": effect_visual_loss,
         "effect_action": effect_action_loss,
         "effect_align": effect_align_loss,
