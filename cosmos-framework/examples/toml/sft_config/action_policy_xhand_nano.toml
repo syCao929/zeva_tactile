@@ -1,0 +1,67 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: OpenMDW-1.1
+
+# ============================================================================
+# UR7e + XHand action-policy SFT — run config for the `action_policy_xhand_nano`
+# experiment. Single 8-GPU node (HSDP 1x8) training from a post-trained policy.
+#
+# The dataset/action/checkpoint knobs live in the registered experiment; this
+# file pins the run-level scalars.
+#
+# Env required:
+#   XHAND_DATA_ROOT=/path/to/press_button_4_times_merged_filtered
+#   XHAND_ACTION_STATS_PATH=<.../meta/feature_stats_compact.json>
+#   BASE_CHECKPOINT_PATH=<Cosmos3-Nano-Policy-DROID DCP dir>
+#   WAN_VAE_PATH=<Wan2.2_VAE.pth>
+#   IMAGINAIRE_OUTPUT_ROOT=/path/to/output_root   # persist checkpoints
+# ============================================================================
+
+[job]
+task       = "vfm"
+experiment = "action_policy_xhand_nano"
+project    = "zeva"
+group      = "action_xhand"
+name       = "action_policy_xhand_nano"
+wandb_mode = "disabled"
+
+[model]
+precision = "bfloat16"
+
+[model.parallelism]
+data_parallel_shard_degree     = 8   # 8-GPU model shard
+data_parallel_replicate_degree = 1   # single node; raise + grad_accum for multi-node
+
+[model.activation_checkpointing]
+mode           = "full"
+save_ops_regex = ["fmha"]
+
+[model.tokenizer]
+vae_path = "${oc.env:WAN_VAE_PATH}"
+
+[optimizer]
+lr = 2.0e-04
+
+[scheduler]
+# The dataset is small (~42.7k windows over 98 train episodes), so a long cycle
+# would barely move the LR. Scale this with max_iter if you train longer.
+cycle_lengths = [5000]
+
+[dataloader_train]
+max_samples_per_batch = 16   # per-rank; global batch = 16 x (8 shard x 1 repl) x grad_accum
+# NOTE: num_workers / prefetch_factor are set in the registered experiment, not
+# here -- `dataloader_train.dataloader` is a LazyCall and rejects nested TOML
+# tables (pydantic extra_forbidden). Override per-run via CLI instead:
+#   -- dataloader_train.dataloader.num_workers=8
+
+[trainer]
+max_iter        = 5000
+logging_iter    = 10
+grad_accum_iter = 1
+
+[trainer.callbacks.compile_tokenizer]
+enabled            = true
+warmup_resolutions = ["256"]
+
+[checkpoint]
+load_path = "${oc.env:BASE_CHECKPOINT_PATH}"
+save_iter = 500

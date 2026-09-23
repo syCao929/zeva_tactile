@@ -1,0 +1,90 @@
+# ---------------------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+downloads/
+eggs/
+.eggs/
+wheels/
+*.egg-info/
+*.egg
+MANIFEST
+
+# ---------------------------------------------------------------------------
+# Virtualenvs and tooling caches
+# ---------------------------------------------------------------------------
+.venv/
+venv/
+env/
+ENV/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyre/
+.pytype/
+.hypothesis/
+.tox/
+.nox/
+.ipynb_checkpoints/
+__pypackages__/
+
+# ---------------------------------------------------------------------------
+# Test / coverage output
+# ---------------------------------------------------------------------------
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+*.cover
+
+# ---------------------------------------------------------------------------
+# Credentials and local environment overrides — never commit
+# ---------------------------------------------------------------------------
+/credentials/
+.env
+*.env
+.env.*
+
+# ---------------------------------------------------------------------------
+# Editor / OS noise
+# ---------------------------------------------------------------------------
+.DS_Store
+*.swp
+.idea/
+.vscode/
+.cursorignore
+.cursorindexingignore
+*.log
+
+# ---------------------------------------------------------------------------
+# Release assets (~39 MB of README images and videos)
+# ---------------------------------------------------------------------------
+/assets/
+
+# ---------------------------------------------------------------------------
+# Datasets, checkpoints, training output, model weights — multi-GB
+# ---------------------------------------------------------------------------
+/datasets/
+/tmp/
+outputs/
+checkpoints/
+pretrained/
+training_output/
+cosmos_training_meta/
+/examples/data/
+/examples/checkpoints/
+*.pt
+# upstream test golden fixtures (~600 KB each) are tracked on purpose
+!tests/data/**/*.pt
+*.pth
+*.distcp
+*.safetensors
+*.ckpt
+*.bin
+*.mp4
