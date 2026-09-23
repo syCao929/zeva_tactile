@@ -40,6 +40,16 @@ def _task_identity_clustering_loss(
 ) -> Tensor:
     """Multi-positive supervised contrastive loss; samples without a positive are ignored."""
     z = F.normalize(_masked_mean(retrieval, valid), dim=-1)
+    # A batch drawn from a single task cluster makes every sample a positive of
+    # every other, so `usable` is all-True and the loss floor is log(N-1) —
+    # reached by collapsing every embedding onto one direction. That is a dead
+    # objective (measured: retrieval cross-window cosine 0.999-1.000), and at
+    # task_weight=0.2 it was ~33% of the reported total, pushing that gradient
+    # into the trunk `z` shared with the phase and effect heads. Skip it instead,
+    # so single-task data trains phase/effect cleanly; multi-task data is
+    # unaffected because the branch only fires below two distinct ids.
+    if not torch.is_grad_enabled() or int(semantic_ids.unique().numel()) < 2:
+        return z.new_zeros(())
     logits = z @ z.T / temperature
     logits.fill_diagonal_(-torch.inf)
     positives = semantic_ids[:, None].eq(semantic_ids[None, :])

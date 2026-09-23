@@ -64,7 +64,7 @@ resolve_name() {
   echo "$NAME_PREFIX-$(date '+%Y%m%d')"
 }
 
-CMD="${1:-start}"
+CMD="${1:-}"   # 不带子命令时打用法，绝不默认开跑（误触会启动 137GB 检查点的训练）
 
 case "$CMD" in
 start)
