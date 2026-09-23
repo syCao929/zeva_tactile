@@ -96,6 +96,7 @@ def make_config() -> Config:
     # vision_sft_nano_mapstyle_dataloader — the CosmosDataLoader variant — in the same module.)
     import cosmos_framework.configs.base.experiment.action.posttrain_config.action_policy_droid_nano  # noqa: F401
     import cosmos_framework.configs.base.experiment.action.posttrain_config.action_policy_xhand_nano  # noqa: F401
+    import cosmos_framework.configs.base.experiment.action.posttrain_config.action_policy_xhand_zeva  # noqa: F401
     import cosmos_framework.configs.base.experiment.action.posttrain_config.action_policy_robocasa365_atomic5_zeva  # noqa: F401
     import cosmos_framework.configs.base.experiment.action.posttrain_config.action_policy_robocasa365_atomic5_zeva_transition_memory  # noqa: F401
     import cosmos_framework.configs.base.experiment.action.posttrain_config.action_policy_robocasa365_atomic5_zeva_pim  # noqa: F401

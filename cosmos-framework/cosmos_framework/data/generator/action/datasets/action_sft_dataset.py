@@ -23,6 +23,7 @@ from cosmos_framework.data.generator.action.datasets.droid_merged_lerobot_datase
 from cosmos_framework.data.generator.action.datasets.droid_lerobot_dataset import DROIDLeRobotDataset
 from cosmos_framework.data.generator.action.datasets.libero_lerobot_dataset import LIBEROLeRobotDataset
 from cosmos_framework.data.generator.action.datasets.xhand_lerobot_dataset import XHandLeRobotDataset
+from cosmos_framework.data.generator.action.datasets.zeva_behavior_wrapper import ZevaBehaviorWrapper
 from cosmos_framework.data.generator.action.transforms import ActionTransformPipeline
 
 
@@ -242,6 +243,7 @@ def get_action_xhand_sft_dataset(
     format_prompt_as_json: bool = False,
     iterable_shuffle: bool = False,
     episode_shuffle_seed: int = 42,
+    zeva_feature_cache: str | None = None,
 ) -> Dataset:
     """Build the UR7e + XHand action-policy SFT dataset.
 
@@ -289,6 +291,11 @@ def get_action_xhand_sft_dataset(
         format_prompt_as_json=format_prompt_as_json,
     )
     sft = ActionSFTDataset(dataset, transform, resolution)
+    if zeva_feature_cache:
+        # Attach the four behavior_* tensors _attach_stage2_behavior requires; the
+        # wrapper sits *outside* the transform so it can add them after the pipeline
+        # has had its say about which keys survive.
+        sft = ZevaBehaviorWrapper(sft, zeva_feature_cache)
     if iterable_shuffle:
         return ActionIterableShuffleDataset(sft, seed=episode_shuffle_seed)
     return sft

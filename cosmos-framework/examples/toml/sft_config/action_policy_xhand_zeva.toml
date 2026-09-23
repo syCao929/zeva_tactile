@@ -1,0 +1,72 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: OpenMDW-1.1
+
+# ============================================================================
+# UR7e + XHand Zeva stage-2 injection training — run config for the
+# `action_policy_xhand_zeva` experiment.
+#
+# Trains ONLY the Zeva behavior modules (behavior_pbd / behavior_adapter /
+# behavior_global_projector) on top of a frozen Phase-1 policy, conditioning them
+# on the CTE features cached by cosmos_framework.zeva_training.cte_features.
+#
+# Env required:
+#   XHAND_DATA_ROOT=/path/to/press_button_4_times_merged_filtered
+#   XHAND_ACTION_STATS_PATH=<.../meta/feature_stats_compact.json>
+#   ZEVA_POLICY_CHECKPOINT=<Phase-1 DCP, e.g. runs/zeva/action_xhand/<run>/checkpoints/iter_000004000>
+#   ZEVA_FEATURE_CACHE=$ZEVA_WORK/datasets/xhand_cte_features
+#   WAN_VAE_PATH=<Wan2.2_VAE.pth>
+#   IMAGINAIRE_OUTPUT_ROOT=/path/to/output_root   # persist checkpoints
+# ============================================================================
+
+[job]
+task       = "vfm"
+experiment = "action_policy_xhand_zeva"
+project    = "zeva"
+group      = "zeva_xhand"
+name       = "action_policy_xhand_zeva"
+wandb_mode = "disabled"
+
+[model]
+precision = "bfloat16"
+
+[model.parallelism]
+data_parallel_shard_degree     = 8   # 8-GPU model shard
+data_parallel_replicate_degree = 1
+
+[model.activation_checkpointing]
+mode           = "full"
+save_ops_regex = ["fmha"]
+
+[model.tokenizer]
+vae_path = "${oc.env:WAN_VAE_PATH}"
+
+[optimizer]
+# Cross-attention / linear probes on a frozen backbone: the paper's own PIM recipe
+# multiplies its fresh modules by 5 (action_policy_robocasa365_atomic5_zeva_pim.py:39-43),
+# which is applied per-module in the experiment file. This is the base rate.
+lr = 2.0e-04
+
+[scheduler]
+# Stage 2 fits a handful of small heads onto frozen features, so it converges far
+# faster than Phase 1. 2000 iters at batch 16 is ~0.75 epoch over 42.7k windows.
+cycle_lengths = [2000]
+
+[dataloader_train]
+max_samples_per_batch = 16   # per-rank; global batch = 16 x (8 shard x 1 repl) x grad_accum
+# num_workers / prefetch_factor are set in the registered experiment (NFS deadlock
+# avoidance); override per-run via CLI: -- dataloader_train.dataloader.num_workers=8
+
+[trainer]
+max_iter        = 2000
+logging_iter    = 10
+grad_accum_iter = 1
+
+[trainer.callbacks.compile_tokenizer]
+enabled            = true
+warmup_resolutions = ["256"]
+
+[checkpoint]
+# NOTE: DCP saves the whole model, so these are ~137 GB each even though only the
+# Zeva modules change. Keep save_iter coarse.
+load_path = "${oc.env:ZEVA_POLICY_CHECKPOINT}"
+save_iter = 500

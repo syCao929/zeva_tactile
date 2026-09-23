@@ -70,7 +70,6 @@ from __future__ import annotations
 
 import collections
 import json
-import logging as log
 import socket
 from typing import Any
 
@@ -78,6 +77,11 @@ import numpy as np
 import torch
 
 from cosmos_framework.data.generator.action.action_processing import resolve_action_normalization
+# The framework's loguru wrapper, NOT stdlib `logging`: stdlib drops INFO records
+# unless a handler is configured, so every operational message from this module
+# (startup, per-request action shape, boundary-frame count) would vanish silently —
+# exactly the lines you need when debugging a robot deployment.
+from cosmos_framework.utils import log
 from cosmos_framework.data.generator.action.domain_utils import get_domain_id
 from cosmos_framework.scripts.action_policy_server_robocasa365_zeva import (
     RobolabPolicyService,
@@ -85,16 +89,23 @@ from cosmos_framework.scripts.action_policy_server_robocasa365_zeva import (
     _build_data_batch_from_sample,
     _ensure_rgb_uint8_image,
     _load_openpi_websocket_policy_server,
+    _resize_rgb_uint8,
 )
 
 # One CTE timestep == one Wan-VAE latent frame == four raw controls.
 # Keep in sync with CausalTransitionEncoderConfig.effect_window_transitions.
 _CTE_STRIDE = 4
 
-# Cap on boundary frames kept per episode. The reference evaluator sends the whole
-# episode history; because the tokenizer is causal we can keep every latent anyway,
-# so this only bounds transformer memory, not correctness. 64 frames = 256 controls.
-_CTE_MAX_BOUNDARY_FRAMES = 64
+# Boundary frames kept per episode. **This must equal `window_latents` from CTE
+# training** (`zeva_training/train_cte.py`, default 17) and the feature cache
+# (`zeva_training/cte_features.py`), and it is a correctness knob, not a memory knob:
+# the CTE's temporal mixers are GRUs with no positional embedding, so `phase[:, -1]`
+# depends on how many frames preceded the current one. Feed 64 frames here and the
+# model would see a state it was never trained on, silently shifting every injected
+# phase/effect away from the cached features the stage-2 policy was fit against.
+# (The reference RoboCasa server has this same freedom and no such guarantee, because
+# its features are recomputed per request rather than looked up from a cache.)
+_CTE_MAX_BOUNDARY_FRAMES = 17
 
 # Left | wrist composite: the source data has no wrist camera, cam_front doubles
 # for it (see xhand_lerobot_dataset._CAMERAS).
@@ -351,7 +362,11 @@ class XHandPolicyService(RobolabPolicyService):
 
     def _empty_causal_interaction_features(self) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         device = next(self.model.parameters()).device
-        global_feature = self._task_context.unsqueeze(0).to(device=device, dtype=torch.float32)
+        # `self._task_context` is already [1, 256] (base server: `torch.stack(...).mean(dim=0,
+        # keepdim=True)`), and `infer` indexes [0] before handing it to the batch shim, which
+        # adds exactly one leading axis. Unsqueezing here yields [1, 1, 256] -> the shim makes
+        # it [1, 1, 1, 256] and `as_batch` rejects it.
+        global_feature = self._task_context.to(device=device, dtype=torch.float32)
         phase = torch.zeros((1, self._cte.cfg.phase_dim), dtype=torch.float32, device=device)
         history = torch.zeros((1, 4, self._cte.cfg.effect_dim), dtype=torch.float32, device=device)
         history_valid = torch.zeros((1, 4), dtype=torch.bool, device=device)
@@ -415,7 +430,11 @@ def serve(args: XHandServerArgs) -> None:
     log.info(f"[xhand-policy-server] starting host={hostname} bind={args.host}:{int(args.port)}")
     service = XHandPolicyService(args)
     server_cls = _load_openpi_websocket_policy_server()
-    server = server_cls(service.infer, host=args.host, port=int(args.port), metadata={"server": "xhand-zeva"})
+    # Pass the service *object*: openpi's handler calls ``self._policy.infer(obs)``, so
+    # handing it the bound method fails at request time with
+    # "'function' object has no attribute 'infer'". Matches the reference servers
+    # (action_policy_server_robolab.py:630, action_policy_server_robocasa365_zeva.py:935).
+    server = server_cls(policy=service, host=args.host, port=int(args.port), metadata={"server": "xhand-zeva"})
     log.info(f"[xhand-policy-server] listening on {hostname}:{int(args.port)}")
     server.serve_forever()
 
