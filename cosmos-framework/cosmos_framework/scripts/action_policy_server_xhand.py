@@ -8,7 +8,7 @@ The robot client reads the dataset's ``meta/info.json`` for state/action order.
 The base observation schema is::
 
     observation/state            [state_dim] float32   (info.json state order)
-    observation.images.<camera>  HWC uint8             (cam_left and cam_front)
+    observation.images.<camera>  HWC uint8             (cam_front, cam_left, cam_right)
     prompt                       str
     current_action_step          int
     reset_tactile_memory         bool                  (first request of a run)
@@ -22,11 +22,8 @@ msgpack + NumPy), so nothing below the message schema needs to change.
 
 Three things this server does that the RoboCasa one does not:
 
-1. **View composition.** The client sends cameras separately; training fed the
-   loader a ``left | wrist`` horizontal composite with ``wrist = cam_front``
-   (the source has no wrist camera, see ``xhand_lerobot_dataset``). This mirrors
-   ``XHandLeRobotDataset._compose_video`` exactly so the policy sees
-   training-distribution input.
+1. **View composition.** All three cameras use the shared training compositor:
+   wrist-mounted cam_right above external cam_front and cam_left.
 
 2. **Action de-normalization.** Training applied ``minmax`` over the dataset's
    own joint-position ranges, so — unlike RoboCasa, whose arm7 channels happen
@@ -75,13 +72,22 @@ from __future__ import annotations
 import collections
 import json
 import socket
+from pathlib import Path
 from typing import Any
 
 import numpy as np
 import torch
+import yaml
 
 from cosmos_framework.data.generator.action.action_processing import resolve_action_normalization
 from cosmos_framework.data.generator.action.domain_utils import get_domain_id
+from cosmos_framework.data.generator.action.xhand_camera import (
+    CAMERA_KEYS,
+    VIEW_DESCRIPTION,
+    compose_xhand_views,
+    require_camera_contract,
+)
+from cosmos_framework.inference.xhand_pim import XHandPIMContext
 from cosmos_framework.inference.xhand_tactile import (
     TACTILE_FPS,
     TACTILE_MEMORY_STEPS,
@@ -94,7 +100,6 @@ from cosmos_framework.scripts.action_policy_server_robocasa365_zeva import (
     _build_data_batch_from_sample,
     _ensure_rgb_uint8_image,
     _load_openpi_websocket_policy_server,
-    _resize_rgb_uint8,
 )
 
 # The framework's loguru wrapper, NOT stdlib `logging`: stdlib drops INFO records
@@ -117,11 +122,6 @@ _CTE_STRIDE = 4
 # (The reference RoboCasa server has this same freedom and no such guarantee, because
 # its features are recomputed per request rather than looked up from a cache.)
 _CTE_MAX_BOUNDARY_FRAMES = 17
-
-# Left | wrist composite: the source data has no wrist camera, cam_front doubles
-# for it (see xhand_lerobot_dataset._CAMERAS).
-_COMPOSITE_LEFT_CAMERA = "observation.images.cam_left"
-_COMPOSITE_WRIST_CAMERA = "observation.images.cam_front"
 
 # observation.state layout of the ur7e_xhand embodiment [1972]:
 #   [0:6] arm joints pos, [6:12] arm joints vel, [12:28] ee pose,
@@ -204,10 +204,11 @@ class _BoundaryBuffer:
         else means a request was dropped or the cadence changed, and guessing
         would silently mis-attribute actions.
         """
-        if self.num_frames < 2 or len(self._actions) != self.num_frames - 1:
+        if self.num_frames < 1 or len(self._actions) != self.num_frames - 1:
             return None
         latents = torch.stack(list(self._latents), dim=0).unsqueeze(0)
-        transitions = np.stack(list(self._actions), axis=0)[None]
+        transitions = (np.stack(list(self._actions), axis=0)[None] if self._actions
+                       else np.empty((1, 0, self.stride, self.action_dim), dtype=np.float32))
         return latents, transitions
 
 
@@ -220,8 +221,16 @@ class XHandServerArgs(RobolabServerArgs):
     action_normalization: str | None = "minmax"
     """Normalization scheme used at training time. ``None`` disables de-normalization."""
 
-    num_cameras_expected: int = 2
-    """Number of client cameras the composite consumes (left + wrist). Informational, used for validation."""
+    num_cameras_expected: int = 3
+    camera_view_size: int = 256
+    """Number of client cameras the composite consumes (front + left + wrist). Informational, used for validation."""
+
+    resolution: str | None = "256"
+    image_height: int = 576
+    image_width: int = 512
+
+    pim_demonstration: str | None = None
+    """Optional completed demonstration features_*.npz to prefill each new scene."""
 
     cte_boundary_frames: int = _CTE_MAX_BOUNDARY_FRAMES
     """Max boundary frames retained per episode."""
@@ -234,6 +243,24 @@ class XHandPolicyService(RobolabPolicyService):
     """Zeva policy service with a TactileTTT-protocol observation adapter."""
 
     def __init__(self, args: XHandServerArgs) -> None:
+        # Use the saved training configuration, not a rebuilt recipe whose defaults
+        # may have changed since the checkpoint was trained.
+        checkpoint = Path(args.checkpoint_path).expanduser().resolve()
+        if checkpoint.name == "model":
+            checkpoint = checkpoint.parent
+        config_path = checkpoint.parent.parent / "config.yaml"
+        if not config_path.is_file():
+            raise ValueError(f"Three-view XHand serving requires saved training config: {config_path}")
+        trained = yaml.safe_load(config_path.read_text())
+        dataset = trained["dataloader_train"]["dataloader"]["datasets"]["xhand"]["dataset"]
+        if dataset.get("camera_layout") != "three_view_grid":
+            raise ValueError("This XHand server requires a three-view checkpoint; the old two-view policy is incompatible")
+        if dataset.get("view_size") != args.camera_view_size or str(dataset.get("resolution")) != str(args.resolution):
+            raise ValueError("Server camera_view_size/resolution must match the saved training configuration")
+        if args.cte_checkpoint is not None:
+            require_camera_contract(
+                torch.load(args.cte_checkpoint, map_location="cpu", weights_only=False), str(args.cte_checkpoint)
+            )
         super().__init__(args)
         self.xargs = args
         if self.cfg.action_dim != 18:
@@ -265,12 +292,19 @@ class XHandPolicyService(RobolabPolicyService):
         )
         self._episode_reset_pending = True
         self._init_tactile_input()
+        behavior = self.model.config.behavior_stage2
+        if behavior.pim_memory_enabled and not self._zeva_enabled:
+            raise ValueError("PIM requires a three-view CTE checkpoint")
+        self._pim_context = (
+            XHandPIMContext(top_k=behavior.pim_persistent_length, demonstration=args.pim_demonstration)
+            if behavior.pim_memory_enabled else None
+        )
 
         if args.require_cte_history and not self._zeva_enabled:
             raise ValueError("--require-cte-history needs Zeva enabled (--cte-checkpoint)")
 
         log.info(
-            f"[xhand-policy-server] ready cameras(composite)={_COMPOSITE_LEFT_CAMERA}+{_COMPOSITE_WRIST_CAMERA} "
+            f"[xhand-policy-server] ready cameras={CAMERA_KEYS} wrist=cam_right "
             f"proprio_dim={len(_PROPRIO_INDICES)} cte_stride={_CTE_STRIDE} zeva={self._zeva_enabled} "
             f"tactile={self._tactile_input is not None}"
         )
@@ -321,21 +355,15 @@ class XHandPolicyService(RobolabPolicyService):
         return _ensure_rgb_uint8_image(value, key)
 
     def _compose_client_view(self, obs: dict[str, Any]) -> np.ndarray:
-        """Build the ``left | wrist`` composite the training loader produced."""
-        left = self._client_image(obs, _COMPOSITE_LEFT_CAMERA)
-        wrist = self._client_image(obs, _COMPOSITE_WRIST_CAMERA)
-        if left is None or wrist is None:
-            present = sorted(k for k in obs if k.endswith("_image"))
-            raise ValueError(
-                f"Client must send {_COMPOSITE_LEFT_CAMERA!r} and {_COMPOSITE_WRIST_CAMERA!r}; "
-                f"got {present or 'no *_image keys'}"
-            )
-        h, w = self.cfg.image_height, self.cfg.image_width // 2
-        if left.shape[:2] != (h, w):
-            left = _resize_rgb_uint8(left, (h, w))
-        if wrist.shape[:2] != (h, w):
-            wrist = _resize_rgb_uint8(wrist, (h, w))
-        return np.concatenate([left, wrist], axis=1)
+        """Use exactly the same three-view compositor as the training loader."""
+        views = {}
+        for name, key in CAMERA_KEYS.items():
+            image = self._client_image(obs, key)
+            if image is None:
+                raise ValueError(f"Client must send {key!r}")
+            views[name] = torch.from_numpy(image.copy()).permute(2, 0, 1).unsqueeze(0).float() / 255.0
+        composite = compose_xhand_views(views, view_size=self.xargs.camera_view_size)
+        return (composite[0].permute(1, 2, 0) * 255).clamp(0, 255).to(torch.uint8).numpy()
 
     def _client_proprio(self, obs: dict[str, Any]) -> np.ndarray:
         state = np.asarray(obs.get("observation/state"), dtype=np.float32)
@@ -370,7 +398,7 @@ class XHandPolicyService(RobolabPolicyService):
             "domain_id": torch.tensor(get_domain_id(self.cfg.domain_name), dtype=torch.long),
             "viewpoint": "concat_view",
             "additional_view_description": (
-                "The left panel is the left agent view and the right panel is the front camera."
+                VIEW_DESCRIPTION
             ),
             "proprio": torch.from_numpy(self._client_proprio(obs)),
         }
@@ -435,6 +463,8 @@ class XHandPolicyService(RobolabPolicyService):
     def infer(self, obs: dict[str, Any]) -> dict[str, Any]:
         with self._lock:
             reset = bool(obs.get("reset_tactile_memory")) or bool(obs.get("cte_reset")) or self._episode_reset_pending
+            if self._pim_context is not None:
+                reset = self._pim_context.prepare(obs, reset=reset)
             tactile_window = None
             if self._tactile_input is not None:
                 tactile_window = self._tactile_input.prepare(obs, reset=reset)
@@ -457,6 +487,9 @@ class XHandPolicyService(RobolabPolicyService):
                     sample["behavior_phase"] = phase[0].cpu()
                     sample["behavior_effect"] = effect[0].cpu()
                     sample["behavior_effect_valid"] = effect_valid[0].cpu()
+                    if self._pim_context is not None:
+                        pp, pe, pv = self._pim_context.observe_and_query(phase[0], effect[0], effect_valid[0])
+                        sample.update(behavior_pim_phase=pp, behavior_pim_effect=pe, behavior_pim_valid=pv)
 
                 data_batch = _build_data_batch_from_sample(sample)
                 seed = self._next_seed()
@@ -496,7 +529,8 @@ def serve(args: XHandServerArgs) -> None:
     # handing it the bound method fails at request time with
     # "'function' object has no attribute 'infer'". Matches the reference servers
     # (action_policy_server_robolab.py:630, action_policy_server_robocasa365_zeva.py:935).
-    metadata = {"server": "xhand-zeva", "cte_query_stride": _CTE_STRIDE}
+    metadata = {"server": "xhand-zeva", "cte_query_stride": _CTE_STRIDE,
+                "cameras": CAMERA_KEYS, "pim_enabled": service._pim_context is not None}
     if service._tactile_input is not None:
         metadata.update(
             tactile_protocol="xhand_dense_v1", tactile_fps=TACTILE_FPS, tactile_memory_steps=TACTILE_MEMORY_STEPS

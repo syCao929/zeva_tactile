@@ -12,7 +12,7 @@
 # 前置：VAE latent 缓存（由 vae_cache 生成，可断点续跑）
 #   PYTHONPATH=. python -m cosmos_framework.zeva_training.vae_cache \
 #     --vae-path "$WAN_VAE_PATH" --dataset-root "$XHAND_DATA_ROOT" \
-#     --output "$ZEVA_WORK/datasets/xhand_cte_cache"
+#     --output "$ZEVA_WORK/datasets/xhand_cte_cache_threeview"
 #
 # 用法:
 #   tools/run-cte-train.sh start [run名]    启动 / 续训
@@ -40,7 +40,7 @@ CKPT_GLOB="cte_step_*"
 : "${STEPS:=500}"
 : "${SAVE_EVERY:=100}"
 : "${BATCH_SIZE:=8}"
-: "${CTE_CACHE:=$ZEVA_WORK/datasets/xhand_cte_cache}"
+: "${CTE_CACHE:=$ZEVA_WORK/datasets/xhand_cte_cache_threeview}"
 : "${CTE_WINDOW_LATENTS:=17}"
 : "${CTE_NUM_WORKERS:=4}"
 : "${CTE_LR:=1e-4}"

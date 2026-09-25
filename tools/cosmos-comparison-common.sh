@@ -24,7 +24,7 @@ Usage: tools/train-cosmos-$mode.sh [options]
   --seed N                Model seed (base: 0; Stage 2: 42; split always 42)
   --save-every N          Checkpoint interval (default: 500)
   --workers N             DataLoader workers/GPU (default: 4, minimum 1)
-  --cte-cache PATH        Default: datasets/xhand_cte_features_v4
+  --cte-cache PATH        Default: datasets/xhand_cte_features_threeview
   --tactile-encoder PATH  Default: models/zeva/tactile_patch_encoder_19999.pt
   --resume                Resume same run; requires existing launch manifest/DCP
   --allow-busy-gpus       Explicitly permit sharing GPUs with existing processes
@@ -46,7 +46,7 @@ output_root="$workspace/runs"
 global_batch=112; batch_size=''; grad_accum=''; save_every=500; workers=4; lr=2e-4
 base_checkpoint=${COSMOS_BASE_CHECKPOINT:-}
 [[ "$mode" != base ]] || base_checkpoint=${BASE_CHECKPOINT_PATH:-}
-cte_cache=${ZEVA_FEATURE_CACHE:-$workspace/datasets/xhand_cte_features_v4}
+cte_cache=${ZEVA_FEATURE_CACHE:-$workspace/datasets/xhand_cte_features_threeview}
 tactile_encoder=${TACTILE_ENCODER_CHECKPOINT:-$workspace/models/zeva/tactile_patch_encoder_19999.pt}
 while (($#)); do
   case "$1" in
@@ -210,6 +210,8 @@ if mode != 'base':
     ds = config['dataloader_train']['dataloader']['datasets']['xhand']['dataset']
     proprio = config['model']['config'].get('proprio_condition', {})
     behavior = config['model']['config'].get('behavior_stage2') or {}
+    require(ds.get('camera_layout') == 'three_view_grid',
+            'This recipe requires a newly trained three-view Stage 1 checkpoint; the old two-view base is incompatible')
     require(ds.get('state_mode') == 'joint18' and ds.get('action_mode') == 'full18',
             'Stage 2 needs a joint18/full18 Stage 1 base')
     require(proprio.get('enabled') and proprio.get('input_dim') == 18,
@@ -226,6 +228,8 @@ for name in ('WAN_VAE_PATH', 'QWEN_VLM_PATH'):
 if mode != 'base':
     cache = Path(os.environ['ZEVA_FEATURE_CACHE'])
     cache_info = json.loads((cache / 'manifest.json').read_text())
+    from cosmos_framework.data.generator.action.xhand_camera import require_camera_contract
+    require_camera_contract(cache_info, str(cache))
     require(cache_info.get('phase_dim') == 128 and cache_info.get('effect_dim') == 128,
             'CTE cache dimensions do not match the Zeva recipe')
     require(cache_info.get('effect_history') == 4, 'CTE effect history must be 4')
@@ -240,10 +244,17 @@ source_paths = [toml, workspace / 'tools/cosmos-comparison-common.sh',
                 workspace / 'cosmos-framework/cosmos_framework/configs/base/experiment/action/posttrain_config/action_policy_xhand_nano.py']
 if mode != 'base':
     source_paths += [workspace / 'cosmos-framework/cosmos_framework/configs/base/experiment/action/posttrain_config/action_policy_xhand_zeva.py']
+source_paths += [workspace / 'cosmos-framework/cosmos_framework' / path for path in (
+    'data/generator/action/xhand_camera.py',
+    'data/generator/action/datasets/xhand_lerobot_dataset.py',
+    'data/generator/action/datasets/zeva_behavior_wrapper.py',
+    'model/zeva/demonstration_memory.py')]
 if mode == 'tactile':
     source_paths += [workspace / 'cosmos-framework/cosmos_framework/configs/base/experiment/action/posttrain_config/action_policy_xhand_zeva_tactile.py']
 contract = {
     'mode': mode, 'base_checkpoint': str(base), 'run_dir': str(run),
+    'camera_contract': 'xhand_three_view_v2_wrist_right',
+    'pim_training': 'independent_training_demonstration' if mode != 'base' else None,
     'steps': steps, 'global_batch': global_batch, 'batch_size': batch, 'grad_accum': accum,
     'world_size': len(gpus), 'seed': seed, 'split_seed': 42, 'split_val_ratio': 0.03,
     'save_every': save, 'workers': workers, 'optimizer_lr': lr,
@@ -264,10 +275,16 @@ if resume:
     prior = json.loads(manifest_path.read_text())
     require(prior['contract'] == contract,
             'Resume contract differs; keep the same budgets, source files and inputs (no scheduler reset)')
-    latest = (run / 'checkpoints/latest_checkpoint.txt').read_text().strip()
-    require(re.fullmatch(r'iter_\d{9}', latest), 'Invalid latest_checkpoint.txt')
-    resume_from = str(run / 'checkpoints' / latest)
-    dcp_inventory(Path(resume_from), ('model', 'optim', 'scheduler', 'trainer'))
+    latest_file = run / 'checkpoints/latest_checkpoint.txt'
+    if latest_file.is_file():
+        latest = latest_file.read_text().strip()
+        require(re.fullmatch(r'iter_\d{9}', latest), 'Invalid latest_checkpoint.txt')
+        resume_from = str(run / 'checkpoints' / latest)
+        dcp_inventory(Path(resume_from), ('model', 'optim', 'scheduler', 'trainer'))
+    else:
+        require(not list((run / 'checkpoints').glob('iter_*')),
+                'Checkpoint directories exist but latest_checkpoint.txt is missing')
+        print('No checkpoint saved yet; restarting this stage from its original initialization.')
 else:
     require(not run.exists() or not any(run.iterdir()), 'Run is not empty: choose a new --run-name or explicit --resume')
 if not dry:

@@ -38,8 +38,9 @@ def test_no_history_before_second_frame() -> None:
 
     buf.observe(_frame(0))
     assert buf.num_frames == 1
-    # A single boundary frame has no completed transition yet.
-    assert buf.as_cte_inputs() is None
+    # A single observation still supplies a causal phase for PIM retrieval.
+    latents, transitions = buf.as_cte_inputs()
+    assert latents.shape[1] == 1 and transitions.shape[1] == 0
 
 
 def test_transitions_trail_frames_by_exactly_one() -> None:
@@ -53,7 +54,7 @@ def test_transitions_trail_frames_by_exactly_one() -> None:
         buf.observe(_frame(q))  # request q arrives with its boundary frame
         prepared = buf.as_cte_inputs()
         if q == 0:
-            assert prepared is None, "no transition exists until the second frame"
+            assert prepared[1].shape[1] == 0, "the initial phase sees no executed controls"
         else:
             latents, transitions = prepared
             assert latents.shape == (1, q + 1, 1, 48, 30, 52)
@@ -125,7 +126,7 @@ def test_lost_request_restarts_the_window() -> None:
     # attribution of everything buffered is now untrustworthy, so restart.
     buf.observe(_frame(4))
     assert buf.num_frames == 1, "stale window must be dropped, not carried forward"
-    assert buf.as_cte_inputs() is None
+    assert buf.as_cte_inputs()[1].shape[1] == 0
 
     # The episode recovers on the next exchange.
     buf.record_returned_actions(_chunk(4))
@@ -167,21 +168,27 @@ def test_proprio_covers_the_action_space() -> None:
 
 
 def test_composite_geometry_matches_training_loader() -> None:
-    """left | wrist, each side square, matching XHandLeRobotDataset._compose_video."""
-    from cosmos_framework.data.generator.action.datasets.xhand_lerobot_dataset import _CAMERAS
+    from types import SimpleNamespace
 
-    # The server hardcodes the same camera mapping the loader exposes.
-    assert _CAMERAS["left"] == "observation.images.cam_left"
-    assert _CAMERAS["wrist"] == "observation.images.cam_front"
+    from cosmos_framework.data.generator.action.xhand_camera import CAMERA_KEYS, compose_xhand_views
+    from cosmos_framework.scripts.action_policy_server_xhand import XHandPolicyService
 
-    # 2 x 256 wide, 256 tall — the same 256x512 the RoboCasa protocol uses.
-    height, width = 256, 512
-    half = width // 2
-    left = np.zeros((height, half, 3), dtype=np.uint8)
-    wrist = np.full((height, half, 3), 255, dtype=np.uint8)
-    composite = np.concatenate([left, wrist], axis=1)
-    assert composite.shape == (height, width, 3)
-    assert composite[:, :half].max() == 0 and composite[:, half:].min() == 255
+    views = {name: torch.full((1, 3, 480, 640), level / 255.0)
+             for name, level in (("front", 32), ("left", 96), ("wrist", 224))}
+    service = XHandPolicyService.__new__(XHandPolicyService)
+    service.xargs = SimpleNamespace(camera_view_size=256)
+    obs = {CAMERA_KEYS[name]: (image[0].permute(1, 2, 0) * 255).byte().numpy()
+           for name, image in views.items()}
+    actual = service._compose_client_view(obs)
+    expected = (compose_xhand_views(views)[0].permute(1, 2, 0) * 255).byte().numpy()
+    np.testing.assert_array_equal(actual, expected)
+    assert actual.shape == (576, 512, 3)
+    assert actual[100, 100, 0] == 224  # wrist above
+    assert actual[450, 100, 0] == 32   # front below left
+    assert actual[450, 400, 0] == 96   # external left below right
+    del obs["observation.images.cam_right"]
+    with pytest.raises(ValueError, match="cam_right"):
+        service._compose_client_view(obs)
 
 
 def test_window_is_bounded() -> None:
@@ -237,6 +244,7 @@ def _cpu_tactile_service():
             behavior_stage2=SimpleNamespace(tactile_enabled=True, tactile_memory_steps=30),
         )
     )
+    service._pim_context = None
     service._zeva_enabled = True
     service._init_tactile_input()
     service._episode_reset_pending = True

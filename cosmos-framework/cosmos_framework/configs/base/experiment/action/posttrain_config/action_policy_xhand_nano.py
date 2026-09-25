@@ -33,13 +33,12 @@ Usage (1 node, 8 GPU)::
 
 import copy
 
-from hydra.core.config_store import ConfigStore
-
 from cosmos_framework.configs.base.experiment.action.posttrain_config.action_policy_droid_nano import (
     action_policy_droid_nano,
 )
 from cosmos_framework.data.generator.action.datasets.action_sft_dataset import get_action_xhand_sft_dataset
 from cosmos_framework.utils.lazy_config import LazyCall as L
+from hydra.core.config_store import ConfigStore
 
 cs = ConfigStore.instance()
 
@@ -108,7 +107,7 @@ _train["dataloader"]["datasets"] = dict(
             chunk_length=32,
             action_mode="full18",  # 6 arm + 12 hand joint positions
             state_mode="joint18",  # arm + hand joint positions == the action space; feeds proprio_condition (18 dims)
-            camera_layout="left_wrist_horizontal",
+            camera_layout="three_view_grid",
             viewpoint="concat_view",
             view_size=256,
             action_normalization="minmax",
@@ -120,10 +119,8 @@ _train["dataloader"]["datasets"] = dict(
             # Emit the behavior_* index fields. Harmless until the Zeva wrapper
             # consumes them, and switching it on later would invalidate caches.
             emit_behavior_metadata=True,
-            # VideoResize resizes aspect-preservingly then reflection-pads to the
-            # closest target in this tier. Our composite is left|wrist = 1:2,
-            # which is not in the ratio table, so it letterboxes into the 16:9
-            # box (192x320 at tier 256). Tune via TOML if that wastes too much.
+            # Three-view composite: wrist above front/left, preserving each panel's 4:3 ratio.
+            # The policy resolution remains an explicit compute-budget choice.
             resolution="256",
             max_action_dim="${model.config.max_action_dim}",
             cfg_dropout_rate=0.1,

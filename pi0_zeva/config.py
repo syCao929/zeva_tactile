@@ -8,12 +8,18 @@ import math
 import os
 from pathlib import Path
 
+from pi0_zeva.camera import CAMERA_CONTRACT, CAMERAS, require_policy_camera
+
 WORKSPACE = Path(__file__).resolve().parents[1]
 
 
 @dataclasses.dataclass(frozen=True)
 class TrainConfig:
     mode: str = "baseline"
+    camera_contract: str = CAMERA_CONTRACT
+    camera_mapping: dict[str, str] = dataclasses.field(
+        default_factory=lambda: dict(CAMERAS)
+    )
     data_root: str = "datasets/press_button_4_times_merged_filtered"
     norm_stats: str = "datasets/pi0_xhand_norm.json"
     openpi_root: str = "../openpi-3d-tactile"
@@ -23,7 +29,7 @@ class TrainConfig:
     init_checkpoint: str | None = None
     feature_cache: str | None = None
     tactile_checkpoint: str | None = None
-    output_dir: str = "runs/pi0/action_xhand/v1-joint18"
+    output_dir: str = "runs/pi0/action_xhand/v2-threeview-joint18"
     horizon: int = 32
     tactile_memory_steps: int = 30
     fps: float = 15.0
@@ -49,6 +55,7 @@ class TrainConfig:
     keep_checkpoints: int = 2
 
     def __post_init__(self) -> None:
+        require_policy_camera(self.as_dict(), "training configuration")
         if self.mode not in {"baseline", "zeva", "zeva_tactile"}:
             raise ValueError("mode must be baseline, zeva or zeva_tactile")
         for name in (

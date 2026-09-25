@@ -11,8 +11,7 @@ independent LeRobot v2.1 roots laid out as ``<root>/<category>/<task>/<x>/lerobo
 Two consequences worth stating plainly:
 
 * **Camera mapping.** The source has ``cam_front`` / ``cam_left`` / ``cam_right``
-  and no wrist camera. By convention ``cam_front`` doubles as the ``wrist`` view;
-  it is a real camera feed, just not mounted on the gripper.
+  cameras. ``cam_right`` is wrist-mounted; front and left are external views.
 * **fps.** The source runs at 15 Hz, so ``fps`` must be passed explicitly; the
   metadata check rejects a root whose ``info.json`` disagrees.
 
@@ -38,25 +37,23 @@ from typing import Any, Sequence
 
 import pyarrow.parquet as pq
 import torch
-import torch.nn.functional as F
 from lerobot.datasets.video_utils import decode_video_frames
 from torch.utils.data import Dataset
 
 from cosmos_framework.data.generator.action.action_processing import ActionNormalizer, resolve_action_normalization
 from cosmos_framework.data.generator.action.datasets.cosmos3_action_lerobot import split_episode_ids
 from cosmos_framework.data.generator.action.domain_utils import get_domain_id
-
-# 源数据没有腕部相机；cam_front 是真实前视画面，这里按约定充当 wrist 视角。
-_CAMERAS = {
-    "left": "observation.images.cam_left",
-    "right": "observation.images.cam_right",
-    "wrist": "observation.images.cam_front",
-}
-
-_CAMERA_LAYOUTS = {
-    "left_wrist_horizontal": ("left", "wrist"),
-    "three_view_grid": ("left", "right", "wrist"),
-}
+from cosmos_framework.data.generator.action.xhand_camera import (
+    CAMERA_KEYS as _CAMERAS,
+)
+from cosmos_framework.data.generator.action.xhand_camera import (
+    CAMERA_LAYOUTS as _CAMERA_LAYOUTS,
+)
+from cosmos_framework.data.generator.action.xhand_camera import (
+    DEFAULT_CAMERA_LAYOUT,
+    VIEW_DESCRIPTION,
+    compose_xhand_views,
+)
 
 _ACTION_INDICES = {
     # 6 arm joints + 12 hand joints, all joint positions.
@@ -126,7 +123,7 @@ class XHandLeRobotDataset(Dataset):
         use_image_augmentation: bool = False,
         emit_behavior_metadata: bool = False,
         task_names: Sequence[str] | None = None,
-        camera_layout: str = "left_wrist_horizontal",
+        camera_layout: str = DEFAULT_CAMERA_LAYOUT,
         action_mode: str = "full18",
         state_mode: str = "joint18",
         action_normalization: str | None = "minmax",
@@ -202,6 +199,7 @@ class XHandLeRobotDataset(Dataset):
         if not roots:
             raise FileNotFoundError(f"No XHand LeRobot-v2.1 roots under {self.root}")
 
+        self.training_episode_ids: set[int] = set()
         self.episodes: list[XHandEpisode] = []
         for root_path in roots:
             self._index_root(root_path)
@@ -227,6 +225,7 @@ class XHandLeRobotDataset(Dataset):
             raise ValueError(f"XHand root {path} is {info['fps']} fps but dataset was built for {self.fps} fps")
         category, task_name = path.relative_to(self.root).parts[:2]
         records = [json.loads(line) for line in (path / "meta" / "episodes.jsonl").read_text().splitlines() if line.strip()]
+        self.training_episode_ids.update(split_episode_ids(len(records), self.split_seed, self.split_val_ratio, "train"))
         for episode_id in sorted(split_episode_ids(len(records), self.split_seed, self.split_val_ratio, self.split)):
             record = records[episode_id]
             length = int(record["length"])
@@ -284,24 +283,15 @@ class XHandLeRobotDataset(Dataset):
         return decode_video_frames(path, timestamps, tolerance_s=2e-4, backend="torchcodec")
 
     def _compose_video(self, episode: XHandEpisode, start: int) -> torch.Tensor:
-        left = self._decode(episode.video_paths["left"], start)
-        if self.viewpoint == "third_person_view":
-            return left
-        wrist = self._decode(episode.video_paths["wrist"], start)
+        views = {name: self._decode(path, start) for name, path in episode.video_paths.items()}
         if self.use_image_augmentation:
-            combined = torch.cat((left, wrist), dim=0)
-            mean = combined.mean(dim=(-2, -1), keepdim=True)
-            combined = ((combined - mean) * random.uniform(0.85, 1.15) + mean).mul(random.uniform(0.85, 1.15)).clamp(0, 1)
-            left, wrist = combined.chunk(2, dim=0)
-        if self.camera_layout == "left_wrist_horizontal":
-            # 两路视角各自缩到 view_size²，横向拼接；默认 256×512，
-            # 与 docs/reproduce.md 的部署协议一致。
-            left = F.interpolate(left, size=(self.view_size, self.view_size), mode="bilinear", align_corners=False)
-            wrist = F.interpolate(wrist, size=(self.view_size, self.view_size), mode="bilinear", align_corners=False)
-            return torch.cat((left, wrist), dim=-1)
-        right = self._decode(episode.video_paths["right"], start)
-        right = F.interpolate(right, size=(self.view_size, self.view_size), mode="bilinear", align_corners=False)
-        return torch.cat((left, torch.cat((right, wrist), dim=-1)), dim=-2)
+            contrast, brightness = random.uniform(0.85, 1.15), random.uniform(0.85, 1.15)
+            for name, frames in views.items():
+                mean = frames.mean(dim=(-2, -1), keepdim=True)
+                views[name] = ((frames - mean) * contrast + mean).mul(brightness).clamp(0, 1)
+        if self.viewpoint == "third_person_view":
+            return views["front"] if "front" in views else views["left"]
+        return compose_xhand_views(views, view_size=self.view_size, layout=self.camera_layout)
 
     def get_action_normalizer(self, _sample: dict[str, Any] | None = None) -> ActionNormalizer | None:
         return self._normalizer
@@ -322,10 +312,8 @@ class XHandLeRobotDataset(Dataset):
             "domain_id": torch.tensor(self.domain_id, dtype=torch.long),
             "viewpoint": self.viewpoint,
             "additional_view_description": (
-                "The left panel is the left agent view and the right panel is the front camera."
-                if self.camera_layout == "left_wrist_horizontal"
-                else "The top panel is the left agent view. The bottom-left panel is the right agent view, "
-                "and the bottom-right panel is the front camera."
+                VIEW_DESCRIPTION if self.camera_layout == DEFAULT_CAMERA_LAYOUT
+                else "The left panel is external cam_left and the right panel is wrist-mounted cam_right."
             ),
             "task_cluster": episode.task_name,
             "task_category": episode.category,

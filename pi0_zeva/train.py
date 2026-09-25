@@ -87,6 +87,7 @@ def memory_kwargs(batch: dict, device) -> dict:
 def evaluate(policy, loader, tokenizer, device, *, max_batches: int, seed: int) -> dict:
     """Repeatable action-flow validation, without training augmentations or RNG drift."""
     import torch
+
     from pi0_zeva.runtime import make_observation
 
     was_training = policy.training
@@ -150,6 +151,7 @@ def _dataset(config: TrainConfig, split: str):
 
 def _preflight(config: TrainConfig) -> dict:
     import importlib.util
+
     from pi0_zeva.runtime import configure_openpi, inspect_dependency_environment
 
     errors = []
@@ -183,6 +185,13 @@ def _preflight(config: TrainConfig) -> dict:
 
         try:
             backbone_path(config.path("init_checkpoint"))
+        except (ValueError, OSError, KeyError) as exc:
+            errors.append(str(exc))
+    if config.feature_cache and config.path("feature_cache").exists():
+        from pi0_zeva.data import index_feature_cache
+
+        try:
+            index_feature_cache(config.path("feature_cache"))
         except (ValueError, OSError, KeyError) as exc:
             errors.append(str(exc))
     return {
@@ -459,7 +468,6 @@ def _run(config: TrainConfig, resume: str | None, eval_only: str | None) -> None
                 )
                 if config.mode != "baseline":
                     pin_backbone(source, output_dir)
-            return None
 
         on_rank0(prepare_output)
         model = (
@@ -488,6 +496,11 @@ def _run(config: TrainConfig, resume: str | None, eval_only: str | None) -> None
             {
                 "event": "start",
                 "mode": config.mode,
+                "camera_contract": config.camera_contract,
+                "camera_mapping": config.camera_mapping,
+                "feature_cache": str(config.path("feature_cache"))
+                if config.feature_cache
+                else None,
                 "step": step,
                 "world_size": world_size,
                 "global_batch": config.batch_size * config.grad_accum * world_size,

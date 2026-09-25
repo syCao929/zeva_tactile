@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: OpenMDW-1.1
 
-"""Supplies the four ``behavior_*`` tensors Zeva's stage-2 injection consumes.
+"""Supplies BIT and independent-demonstration PIM features for Zeva injection.
 
 This is the wrapper the release ships without.  ``_attach_stage2_behavior``
 (``omni_mot_model.py:714-716``) hard-``KeyError``s unless ``behavior_global``,
@@ -45,11 +45,15 @@ agree by construction.
 from __future__ import annotations
 
 import hashlib
+import json
 from collections import OrderedDict
 from pathlib import Path
 
 import numpy as np
 import torch
+
+from cosmos_framework.data.generator.action.xhand_camera import require_camera_contract
+from cosmos_framework.model.zeva.demonstration_memory import demonstration_memory
 
 # One cached row per latent frame = per 4 raw controls (see cte_features).
 RAW_PER_LATENT = 4
@@ -87,18 +91,62 @@ class ZevaBehaviorWrapper(torch.utils.data.Dataset):
     something to paper over.
     """
 
-    def __init__(self, sft, feature_cache: str | Path, latent_cache_size: int = 8) -> None:
+    def __init__(self, sft, feature_cache: str | Path, latent_cache_size: int = 8, *,
+                 pim_training: bool = False, pim_top_k: int = 4, pim_context_dropout: float = 0.2) -> None:
         self.sft = sft
         self.inner = sft._dataset  # the XHandLeRobotDataset behind the transform
         self.cache_dir = Path(feature_cache)
         if not self.cache_dir.is_dir():
             raise FileNotFoundError(f"no CTE feature cache at {self.cache_dir}; run cte_features first")
+        manifest = json.loads((self.cache_dir / "manifest.json").read_text())
+        require_camera_contract(manifest, str(self.cache_dir))
+        self.pim_training = pim_training
+        self.pim_top_k = int(pim_top_k)
+        self.pim_context_dropout = float(pim_context_dropout)
+        if not 0 <= self.pim_context_dropout <= 1:
+            raise ValueError("pim_context_dropout must be in [0,1]")
+        self._pim_cache: OrderedDict = OrderedDict()
+        self._tasks: dict[int, str] = {}
         self._cache: OrderedDict[int, dict] = OrderedDict()
         self._cache_size = int(latent_cache_size)
         self._files: dict[int, Path] = {}
         for f in sorted(self.cache_dir.glob("features_*.npz")):
             with np.load(f) as z:
-                self._files[int(z["episode_id"])] = f
+                require_camera_contract(z, str(f))
+                episode_id = int(z["episode_id"])
+                if episode_id in self._files:
+                    raise ValueError(f"Duplicate feature-cache episode ID: {episode_id}")
+                self._files[episode_id] = f
+                self._tasks[episode_id] = str(z["task_cluster"])
+        self._support_ids: list[int] = []
+        if pim_training:
+            # Supplied by the raw dataset from the same per-root split, even when
+            # this wrapper serves val queries. Validation trajectories never support PIM.
+            self._support_ids = sorted(self.inner.training_episode_ids.intersection(self._files))
+            for episode in self.inner.episodes:
+                if not self.support_candidates(episode.episode_id, episode.task_name):
+                    raise ValueError(f"No independent training demonstration for episode {episode.episode_id}")
+
+
+    def support_candidates(self, query_episode: int, task: str) -> list[int]:
+        return [key for key in self._support_ids if key != query_episode and self._tasks[key] == task]
+
+    def _pim_features(self, episode, phase: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        candidates = self.support_candidates(episode.episode_id, episode.task_name)
+        training = self.inner.split == "train"
+        support_id = candidates[int(torch.randint(len(candidates), ()).item())] if training else candidates[0]
+        memory = self._pim_cache.pop(support_id, None)
+        if memory is None:
+            memory = demonstration_memory(self._episode_row(support_id), episode.task_name, top_k=self.pim_top_k)
+        self._pim_cache[support_id] = memory
+        while len(self._pim_cache) > self._cache_size:
+            self._pim_cache.popitem(last=False)
+        phases, effects, valid, _ = memory.query_tensors(phase, top_k=self.pim_top_k)
+        if training and float(torch.rand(())) < self.pim_context_dropout:
+            phases.zero_()
+            effects.zero_()
+            valid.zero_()
+        return phases, effects, valid
 
     # ---------------------------------------------------------------- plumbing
     def __len__(self) -> int:
@@ -149,4 +197,9 @@ class ZevaBehaviorWrapper(torch.utils.data.Dataset):
         sample["behavior_phase"] = rows["phase"][row].float()  # [128]
         sample["behavior_effect"] = rows["effect"][row].float()  # [4,128]
         sample["behavior_effect_valid"] = rows["effect_valid"][row]  # [4] bool
+        if self.pim_training:
+            phases, effects, valid = self._pim_features(episode, sample["behavior_phase"])
+            sample["behavior_pim_phase"] = phases
+            sample["behavior_pim_effect"] = effects
+            sample["behavior_pim_valid"] = valid
         return sample

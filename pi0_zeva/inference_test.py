@@ -8,7 +8,7 @@ import torch
 
 from pi0_zeva import inference
 from pi0_zeva.config import TrainConfig
-from pi0_zeva.data import Normalizer, STATE_INDICES
+from pi0_zeva.data import STATE_INDICES, Normalizer
 from pi0_zeva.runtime import IMAGE_KEYS
 
 
@@ -148,7 +148,9 @@ def _checkpoint(tmp_path, **metadata_overrides):
     return directory
 
 
-@pytest.mark.parametrize("invalid", ["hash", "mode", "provenance"])
+@pytest.mark.parametrize(
+    "invalid", ["hash", "mode", "provenance", "unversioned", "camera", "mapping"]
+)
 def test_load_rejects_manifest_or_normalization_before_model_creation(
     tmp_path, monkeypatch, invalid
 ):
@@ -165,6 +167,18 @@ def test_load_rejects_manifest_or_normalization_before_model_creation(
         metadata_path = directory / "manifest.json"
         metadata = json.loads(metadata_path.read_text())
         metadata["norm_sha256"] = hashlib.sha256(stats_path.read_bytes()).hexdigest()
+        metadata_path.write_text(json.dumps(metadata))
+    elif invalid in {"unversioned", "camera", "mapping"}:
+        metadata_path = directory / "manifest.json"
+        metadata = json.loads(metadata_path.read_text())
+        if invalid == "unversioned":
+            metadata["config"].pop("camera_contract")
+        elif invalid == "camera":
+            metadata["config"]["camera_contract"] = "old_two_view"
+        else:
+            metadata["config"]["camera_mapping"]["right_wrist_0_rgb"] = (
+                "observation.images.cam_front"
+            )
         metadata_path.write_text(json.dumps(metadata))
     monkeypatch.setattr(
         inference,

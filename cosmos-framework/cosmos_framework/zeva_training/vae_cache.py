@@ -58,7 +58,13 @@ import torch.nn.functional as F
 # Must match the inference path — see probe_vae for why.
 _VISION_HEIGHT = 480
 _VISION_WIDTH = 832
-_CACHE_VERSION = 1
+_CACHE_VERSION = 2
+
+from cosmos_framework.data.generator.action.xhand_camera import (
+    CAMERA_CONTRACT,
+    compose_xhand_views,
+    require_camera_contract,
+)
 
 # One Wan latent frame per this many raw control steps — the VAE's temporal
 # compression factor, and the cadence serving sees (the client re-queries every 4
@@ -67,7 +73,7 @@ RAW_PER_LATENT = 4
 
 
 def _compose_frames(video: torch.Tensor) -> torch.Tensor:
-    """``[C,T,H,W]`` uint8 composite (already left|wrist) -> ``[1,C,T,H',W']`` in [-1,1].
+    """``[C,T,H,W]`` uint8 composite (already three-view) -> ``[1,C,T,H',W']`` in [-1,1].
 
     Mirrors ``action_policy_server_robocasa365_zeva.py:695-703``: upscale to
     (480, 832), then map [0,255] -> [-1,1]. ``WanVAE.encode`` does *not*
@@ -140,7 +146,7 @@ def encode_per_frame(vae, x: torch.Tensor) -> torch.Tensor:
 
 
 def _decode_full_episode(dataset, episode) -> torch.Tensor:
-    """Decode every frame of one episode as the 256x512 left|wrist composite.
+    """Decode every frame of one episode as the shared three-view composite.
 
     Reuses the loader's own decode helpers (``XHandLeRobotDataset._decode`` /
     ``_compose_video``) so caching and training see identical pixels — the only
@@ -157,23 +163,8 @@ def _decode_full_episode(dataset, episode) -> torch.Tensor:
         name: decode_video_frames(path, timestamps, tolerance_s=2e-4, backend="torchcodec")
         for name, path in episode.video_paths.items()
     }
-    left = views["left"]
-    wrist = views["wrist"]
-    size = (dataset.view_size, dataset.view_size)
-    left = F.interpolate(left, size=size, mode="bilinear", align_corners=False)
-    wrist = F.interpolate(wrist, size=size, mode="bilinear", align_corners=False)
-    # ``_compose_frames`` (and ``probe_vae._preprocess``) contract: **uint8 in [0,255]**,
-    # which they map to [-1,1] via ``/127.5 - 1``. ``decode_video_frames`` returns
-    # floats in [0,1], so the scaling has to happen here.
-    #
-    # Returning them unscaled -- which this function did until 2026-09-24 -- meant
-    # ``_compose_frames`` computed ``0.4/127.5 - 1 ~= -0.997`` for every pixel: the Wan
-    # VAE was fed a near-constant black image, and *every* latent in the CTE cache was
-    # built from it. The scene content survived only in the ~0.4% residual, which is why
-    # the resulting CTE produced near-constant phase/effect that looked like a loss
-    # problem. Verified by encoding one episode both ways: the cached latents match the
-    # unscaled pipeline at cosine 0.9994 and the correct one at 0.169.
-    return (torch.cat((left, wrist), dim=-1) * 255.0).clamp_(0.0, 255.0).to(torch.uint8)
+    composite = compose_xhand_views(views, view_size=dataset.view_size, layout=dataset.camera_layout)
+    return (composite * 255.0).clamp_(0, 255).to(torch.uint8)
 
 
 def rebuild_manifest(out_dir: Path, args: argparse.Namespace) -> int:
@@ -187,6 +178,7 @@ def rebuild_manifest(out_dir: Path, args: argparse.Namespace) -> int:
     entries = []
     for f in sorted(out_dir.glob("episode_*.npz")):
         with np.load(f) as z:
+            require_camera_contract(z, str(f))
             latents = z["latents"]  # [C,T,H,W]
             entries.append(
                 {
@@ -207,6 +199,7 @@ def rebuild_manifest(out_dir: Path, args: argparse.Namespace) -> int:
         json.dumps(
             {
                 "version": _CACHE_VERSION,
+                "camera_contract": CAMERA_CONTRACT,
                 # Kept identical to the incremental writer below so the two paths
                 # cannot drift; nothing reads this key today — `cte_dataset` reads
                 # the npz files directly and treats the manifest as advisory.
@@ -244,13 +237,19 @@ def main() -> int:
         action="store_true",
         help="rebuild manifest.json by scanning the cache directory, then exit (no GPU work)",
     )
+    ap.add_argument("--shard-index", type=int, default=int(os.environ.get("RANK", "0")))
+    ap.add_argument("--num-shards", type=int, default=int(os.environ.get("WORLD_SIZE", "1")))
     args = ap.parse_args()
+    if not 0 <= args.shard_index < args.num_shards:
+        ap.error("shard-index must be in [0, num-shards)")
 
     out_dir = Path(args.output)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     if args.rebuild_manifest:
         return rebuild_manifest(out_dir, args)
+
+    torch.cuda.set_device(int(os.environ.get("LOCAL_RANK", "0")))
 
     from cosmos_framework.data.generator.action.datasets.xhand_lerobot_dataset import XHandLeRobotDataset
     from cosmos_framework.model.generator.tokenizers.wan2pt2_vae_4x16x16 import Wan2pt2VAEInterface
@@ -269,6 +268,8 @@ def main() -> int:
         split="full",  # cache every episode; train/val split happens downstream
         parquet_cache_size=1,
     )
+    if len({ep.episode_id for ep in dataset.episodes}) != len(dataset.episodes):
+        raise ValueError("Cache requires globally unique episode IDs; merge/reindex the dataset first")
     print(f"dataset: {len(dataset.episodes)} episodes under {args.dataset_root}")
 
     vae = Wan2pt2VAEInterface(
@@ -281,13 +282,16 @@ def main() -> int:
     episodes = dataset.episodes
     if args.limit > 0:
         episodes = episodes[: args.limit]
+    episodes = episodes[args.shard_index::args.num_shards]
 
     # Seed from any previous run so re-running after an interruption keeps every
     # already-encoded episode in the manifest.
-    manifest_path = out_dir / "manifest.json"
+    manifest_path = out_dir / ("manifest.json" if args.num_shards == 1 else f"manifest.rank{args.shard_index}.json")
     by_id: dict[int, dict] = {}
     if manifest_path.is_file():
-        for e in json.loads(manifest_path.read_text()).get("episodes", []):
+        manifest = json.loads(manifest_path.read_text())
+        require_camera_contract(manifest, str(manifest_path))
+        for e in manifest.get("episodes", []):
             by_id[int(e["episode_id"])] = e
 
     def write_manifest() -> None:
@@ -302,6 +306,7 @@ def main() -> int:
             json.dumps(
                 {
                     "version": _CACHE_VERSION,
+                "camera_contract": CAMERA_CONTRACT,
                     "dataset_root": str(Path(args.dataset_root).resolve()),
                     "vae_path": args.vae_path,
                     "image_channels": 48,
@@ -327,6 +332,8 @@ def main() -> int:
     for ep in episodes:
         out_file = out_dir / f"episode_{ep.episode_id:06d}.npz"
         if out_file.exists() and not args.overwrite:
+            with np.load(out_file) as existing:
+                require_camera_contract(existing, str(out_file))
             skipped += 1
             continue
 
@@ -354,6 +361,7 @@ def main() -> int:
         latent = latent[0].to(torch.float16).cpu().numpy()
         np.savez_compressed(
             out_file,
+            camera_contract=np.array(CAMERA_CONTRACT),
             latents=latent,
             actions=actions,
             episode_id=np.int64(ep.episode_id),

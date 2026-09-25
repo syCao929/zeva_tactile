@@ -1,6 +1,6 @@
 {
   "mode": "baseline",
-  "output_dir": "runs/pi0/action_xhand/v1-joint18",
+  "output_dir": "runs/pi0/action_xhand/v2-threeview-joint18",
   "horizon": 32,
   "batch_size": 1,
   "grad_accum": 14,

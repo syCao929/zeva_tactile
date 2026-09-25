@@ -12,6 +12,7 @@ from safetensors.torch import load_model
 from torch import nn
 from torch.utils.data import DataLoader, DistributedSampler, TensorDataset
 
+from pi0_zeva.camera import CAMERA_CONTRACT, CAMERAS
 from pi0_zeva.checkpoint import (
     backbone_path,
     capture_rng,
@@ -51,7 +52,12 @@ def save(policy, optimizer, directory, step, mode="baseline", cursor=None):
         optimizer,
         directory,
         step=step,
-        config={"mode": mode, "horizon": 32},
+        config={
+            "mode": mode,
+            "horizon": 32,
+            "camera_contract": CAMERA_CONTRACT,
+            "camera_mapping": CAMERAS,
+        },
         loader_state=cursor or {"epoch": 2, "offset": 3},
         rng_states=[capture_rng()],
         norm_sha256="test_norm_sha256",

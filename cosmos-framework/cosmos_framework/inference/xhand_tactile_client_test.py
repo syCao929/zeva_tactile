@@ -41,6 +41,7 @@ def _legacy_client():
             "observation/state": state_history.sample(frame_idx),
             "observation/cam_left_image": np.zeros((2, 2, 3), dtype=np.uint8),
             "observation/cam_front_image": np.zeros((2, 2, 3), dtype=np.uint8),
+            "observation/cam_right_image": np.zeros((2, 2, 3), dtype=np.uint8),
         }
 
     client.build_pi0_observation = build_pi0_observation
@@ -67,6 +68,7 @@ def test_legacy_adapter_emits_server_protocol_and_pins_control_settings():
     assert observation["observation/state"].shape == (1972,)
     assert "observation.images.cam_left" in observation
     assert "observation.images.cam_front" in observation
+    assert "observation.images.cam_right" in observation
     np.testing.assert_array_equal(observation["tactile_frame_indices"][-5:], np.arange(5))
 
 

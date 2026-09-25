@@ -12,6 +12,7 @@ PI0_DRY_RUN=${PI0_DRY_RUN:-0}
 PI0_RESUME=${PI0_RESUME:-}
 PI0_RUN_NAME=${PI0_RUN_NAME:-}
 PI0_BASE_CHECKPOINT=${PI0_BASE_CHECKPOINT:-}
+PI0_FEATURE_CACHE=${PI0_FEATURE_CACHE:-"$PI0_WORKSPACE/datasets/xhand_cte_features_threeview"}
 PI0_STEPS=${PI0_STEPS:-}
 PI0_BATCH_SIZE=${PI0_BATCH_SIZE:-}
 PI0_GRAD_ACCUM=${PI0_GRAD_ACCUM:-}
@@ -32,6 +33,7 @@ Options:
   --output-root DIR        Root for comparison runs
   --pair-name NAME         Immutable Stage-2 pair contract name
   --base-checkpoint DIR    Concrete baseline step directory (Stage 2 only)
+  --cte-cache DIR          Three-view CTE features (default: datasets/xhand_cte_features_threeview)
   --learning-rate LR       Override learning rate
   --warmup-steps N         Override warmup steps
   --resume CHECKPOINT      Resume this concrete checkpoint directory
@@ -53,6 +55,7 @@ pi0_parse_common() {
       --output-root) PI0_OUTPUT_ROOT=$2; shift 2;;
       --pair-name) PI0_PAIR_NAME=$2; shift 2;;
       --base-checkpoint) PI0_BASE_CHECKPOINT=$2; shift 2;;
+      --cte-cache) PI0_FEATURE_CACHE=$2; shift 2;;
       --learning-rate) PI0_LEARNING_RATE=$2; shift 2;;
       --warmup-steps) PI0_WARMUP_STEPS=$2; shift 2;;
       --resume) PI0_RESUME=$2; shift 2;;
@@ -103,6 +106,8 @@ pi0_validate_resume_checkpoint() {
 
 pi0_prepare_pair_contract() {
   pi0_validate_base_checkpoint "$PI0_BASE_CHECKPOINT"
+  [[ "$PI0_FEATURE_CACHE" == /* ]] || PI0_FEATURE_CACHE="$PI0_WORKSPACE/$PI0_FEATURE_CACHE"
+  PI0_FEATURE_CACHE=$(realpath -m -- "$PI0_FEATURE_CACHE")
   [[ -z "$PI0_RESUME" ]] || pi0_validate_resume_checkpoint "$PI0_RESUME"
   PI0_OUTPUT_ROOT=$(realpath -m -- "$PI0_OUTPUT_ROOT")
   PI0_RUN_DIR="$PI0_OUTPUT_ROOT/$PI0_PAIR_NAME/$PI0_RUN_NAME"
@@ -120,23 +125,28 @@ pi0_prepare_pair_contract() {
   for required in \
     "$PI0_WORKSPACE/datasets/press_button_4_times_merged_filtered" \
     "$PI0_WORKSPACE/datasets/pi0_xhand_norm.json" \
-    "$PI0_WORKSPACE/datasets/xhand_cte_features_v4/manifest.json" \
+    "$PI0_FEATURE_CACHE/manifest.json" \
     "$PI0_WORKSPACE/../hf_weight/paligemma_tokenizer.model"; do
     [[ -e "$required" ]] || { echo "Missing π0 comparison input: $required" >&2; exit 2; }
   done
   local payload_file
   payload_file=$(mktemp)
-  export PI0_WORKSPACE PI0_BASE_CHECKPOINT PI0_OPENPI_ROOT PI0_NPROC PI0_SEED PI0_BATCH_SIZE PI0_GRAD_ACCUM PI0_STEPS PI0_LEARNING_RATE PI0_WARMUP_STEPS
+  export PI0_WORKSPACE PI0_BASE_CHECKPOINT PI0_FEATURE_CACHE PI0_OPENPI_ROOT PI0_NPROC PI0_SEED PI0_BATCH_SIZE PI0_GRAD_ACCUM PI0_STEPS PI0_LEARNING_RATE PI0_WARMUP_STEPS
   PYTHONPATH="$PI0_WORKSPACE:$PI0_WORKSPACE/tools" "$PI0_WORKSPACE/envs/pi0/bin/python" - "$payload_file" <<'PY'
 import hashlib, json, os, sys
 from pathlib import Path
+from pi0_zeva.camera import CAMERA_CONTRACT, CAMERAS, require_policy_camera
+from pi0_zeva.data import index_feature_cache
 out=Path(sys.argv[1]); workspace=Path(os.environ["PI0_WORKSPACE"]).resolve(); base=Path(os.environ["PI0_BASE_CHECKPOINT"]).resolve()
+cache=Path(os.environ["PI0_FEATURE_CACHE"])
+require_policy_camera(json.loads((base/"manifest.json").read_text())["config"], base)
+index_feature_cache(cache)
 def sha(path):
     h=hashlib.sha256()
     with path.open("rb") as f:
         for chunk in iter(lambda:f.read(8*1024*1024),b""): h.update(chunk)
     return h.hexdigest()
-payload={"schema":1,"backbone":"pi0","mode":"zeva_stage2","base_checkpoint":str(base),"base_manifest_sha256":sha(base/"manifest.json"),"base_backbone_sha256":sha(base/"backbone.safetensors"),"data_root":str((workspace/"datasets/press_button_4_times_merged_filtered").resolve()),"norm_stats":str((workspace/"datasets/pi0_xhand_norm.json").resolve()),"norm_stats_sha256":sha(workspace/"datasets/pi0_xhand_norm.json"),"feature_cache":str((workspace/"datasets/xhand_cte_features_v4").resolve()),"cte_manifest_sha256":sha(workspace/"datasets/xhand_cte_features_v4/manifest.json"),"tokenizer_path":str((workspace/"../hf_weight/paligemma_tokenizer.model").resolve()),"tokenizer_sha256":sha(workspace/"../hf_weight/paligemma_tokenizer.model"),"openpi_root":str(Path(os.environ["PI0_OPENPI_ROOT"]).resolve()),"horizon":32,"fps":15.0,"split_seed":42,"split_val_ratio":0.03,"seed":int(os.environ["PI0_SEED"]),"world_size":int(os.environ["PI0_NPROC"]),"batch_size":int(os.environ["PI0_BATCH_SIZE"]),"grad_accum":int(os.environ["PI0_GRAD_ACCUM"]),"global_batch":int(os.environ["PI0_NPROC"])*int(os.environ["PI0_BATCH_SIZE"])*int(os.environ["PI0_GRAD_ACCUM"]),"max_steps":int(os.environ["PI0_STEPS"]),"learning_rate":float(os.environ["PI0_LEARNING_RATE"]),"warmup_steps":int(os.environ["PI0_WARMUP_STEPS"])}
+payload={"schema":2,"camera_contract":CAMERA_CONTRACT,"camera_mapping":CAMERAS,"backbone":"pi0","mode":"zeva_stage2","base_checkpoint":str(base),"base_manifest_sha256":sha(base/"manifest.json"),"base_backbone_sha256":sha(base/"backbone.safetensors"),"data_root":str((workspace/"datasets/press_button_4_times_merged_filtered").resolve()),"norm_stats":str((workspace/"datasets/pi0_xhand_norm.json").resolve()),"norm_stats_sha256":sha(workspace/"datasets/pi0_xhand_norm.json"),"feature_cache":str(cache),"cte_manifest_sha256":sha(cache/"manifest.json"),"tokenizer_path":str((workspace/"../hf_weight/paligemma_tokenizer.model").resolve()),"tokenizer_sha256":sha(workspace/"../hf_weight/paligemma_tokenizer.model"),"openpi_root":str(Path(os.environ["PI0_OPENPI_ROOT"]).resolve()),"horizon":32,"fps":15.0,"split_seed":42,"split_val_ratio":0.03,"seed":int(os.environ["PI0_SEED"]),"world_size":int(os.environ["PI0_NPROC"]),"batch_size":int(os.environ["PI0_BATCH_SIZE"]),"grad_accum":int(os.environ["PI0_GRAD_ACCUM"]),"global_batch":int(os.environ["PI0_NPROC"])*int(os.environ["PI0_BATCH_SIZE"])*int(os.environ["PI0_GRAD_ACCUM"]),"max_steps":int(os.environ["PI0_STEPS"]),"learning_rate":float(os.environ["PI0_LEARNING_RATE"]),"warmup_steps":int(os.environ["PI0_WARMUP_STEPS"])}
 out.write_text(json.dumps(payload,indent=2,sort_keys=True)+"\n")
 PY
   PYTHONPATH="$PI0_WORKSPACE:$PI0_WORKSPACE/tools" "$PI0_WORKSPACE/envs/pi0/bin/python" - "$PI0_CONTRACT" "$payload_file" "$PI0_DRY_RUN" <<'PY'

@@ -19,8 +19,8 @@ from typing import Any
 
 from torch.utils.data import Dataset, IterableDataset, get_worker_info
 
-from cosmos_framework.data.generator.action.datasets.droid_merged_lerobot_dataset import DROIDMergedLeRobotDataset
 from cosmos_framework.data.generator.action.datasets.droid_lerobot_dataset import DROIDLeRobotDataset
+from cosmos_framework.data.generator.action.datasets.droid_merged_lerobot_dataset import DROIDMergedLeRobotDataset
 from cosmos_framework.data.generator.action.datasets.libero_lerobot_dataset import LIBEROLeRobotDataset
 from cosmos_framework.data.generator.action.datasets.xhand_lerobot_dataset import XHandLeRobotDataset
 from cosmos_framework.data.generator.action.datasets.zeva_behavior_wrapper import ZevaBehaviorWrapper
@@ -237,7 +237,7 @@ def get_action_xhand_sft_dataset(
     tactile_memory_steps: int = 30,
     action_mode: str = "full18",
     state_mode: str = "joint18",
-    camera_layout: str = "left_wrist_horizontal",
+    camera_layout: str = "three_view_grid",
     viewpoint: str = "concat_view",
     view_size: int = 256,
     action_normalization: str | None = "minmax",
@@ -259,6 +259,9 @@ def get_action_xhand_sft_dataset(
     iterable_shuffle: bool = False,
     episode_shuffle_seed: int = 42,
     zeva_feature_cache: str | None = None,
+    pim_training: bool = False,
+    pim_top_k: int = 4,
+    pim_context_dropout: float = 0.2,
 ) -> Dataset:
     """Build the UR7e + XHand action-policy SFT dataset.
 
@@ -270,9 +273,8 @@ def get_action_xhand_sft_dataset(
     ``<root>/<category>/<task>/<x>/lerobot``.
 
     Two source-specific notes: the data runs at **15 fps**, so ``fps`` must match
-    ``meta/info.json`` or the metadata check rejects the root; and the source has no
-    wrist camera, so ``cam_front`` doubles as the ``wrist`` view (see
-    ``xhand_lerobot_dataset``).
+    ``meta/info.json`` or the metadata check rejects the root; and ``cam_right`` is the wrist camera. ``cam_front`` and ``cam_left``
+    are external cameras. All three are used by default.
 
     ``emit_behavior_metadata=True`` adds the ``behavior_*`` index fields Zeva's
     stage-2 training needs to look up CTE features / task-context bank entries.
@@ -313,7 +315,8 @@ def get_action_xhand_sft_dataset(
         # Attach the four behavior_* tensors _attach_stage2_behavior requires; the
         # wrapper sits *outside* the transform so it can add them after the pipeline
         # has had its say about which keys survive.
-        sft = ZevaBehaviorWrapper(sft, zeva_feature_cache)
+        sft = ZevaBehaviorWrapper(sft, zeva_feature_cache, pim_training=pim_training,
+                                  pim_top_k=pim_top_k, pim_context_dropout=pim_context_dropout)
     if iterable_shuffle:
         return ActionIterableShuffleDataset(sft, seed=episode_shuffle_seed)
     return sft

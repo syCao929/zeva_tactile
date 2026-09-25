@@ -61,7 +61,7 @@ class TactileClientWindow:
         return self.packet(frame_idx)["tactile_state"]
 
 
-def adapt_factile_client(client: ModuleType) -> None:
+def adapt_factile_client(client: ModuleType, *, pim_episode_id: str | None = None, pim_attempt_id: int = 0) -> None:
     """Install narrow hooks on the original client without changing its file."""
     required = ("parse_args", "StateHistoryBuffer", "build_pi0_observation", "request_action_chunk", "main")
     if missing := [name for name in required if not hasattr(client, name)]:
@@ -101,8 +101,10 @@ def adapt_factile_client(client: ModuleType) -> None:
         frame_idx = bound.arguments["frame_idx"]
         observation = original_observation(*args, **kwargs)
         observation.update(history.packet(frame_idx))
+        if pim_episode_id is not None:
+            observation.update(pim_episode_id=pim_episode_id, pim_attempt_id=pim_attempt_id)
         observation["observation/state"] = np.asarray(bound.arguments["env_state"], dtype=np.float32)
-        for camera in ("cam_left", "cam_front"):
+        for camera in ("cam_front", "cam_left", "cam_right"):
             observation[f"observation.images.{camera}"] = observation.pop(f"observation/{camera}_image")
         return observation
 
@@ -129,6 +131,8 @@ def adapt_factile_client(client: ModuleType) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--client-source", type=Path, required=True, help="Path to ur7e_xhand_deploy_pi0_client.py")
+    parser.add_argument("--pim-episode-id", default=None, help="Same scene ID across retries; change for new scenes")
+    parser.add_argument("--pim-attempt-id", type=int, default=0, help="0 initially, then increment on each retry")
     parser.add_argument("client_args", nargs=argparse.REMAINDER, help="Original client arguments after --")
     args = parser.parse_args(argv)
     source = args.client_source.resolve()
@@ -139,7 +143,7 @@ def main(argv: list[str] | None = None) -> int:
     sys.modules[spec.name] = client
     sys.path.insert(0, str(source.parent))
     spec.loader.exec_module(client)
-    adapt_factile_client(client)
+    adapt_factile_client(client, pim_episode_id=args.pim_episode_id, pim_attempt_id=args.pim_attempt_id)
     forwarded = args.client_args[1:] if args.client_args[:1] == ["--"] else args.client_args
     previous_argv = sys.argv
     try:

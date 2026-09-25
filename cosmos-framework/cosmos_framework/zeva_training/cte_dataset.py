@@ -38,6 +38,8 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
+from cosmos_framework.data.generator.action.xhand_camera import require_camera_contract
+
 # One latent frame per 4 raw control steps (see vae_cache / probe_vae).
 RAW_PER_LATENT = 4
 # Keep in sync with CausalTransitionEncoderConfig.effect_window_transitions.
@@ -53,7 +55,7 @@ class CTECacheWindowDataset(Dataset):
         *,
         window_latents: int = 17,
         split: str = "train",
-        val_ratio: float = 0.05,
+        val_ratio: float = 0.03,
         split_seed: int = 42,
         latent_cache_size: int = 8,
         episodes: list[int] | None = None,
@@ -74,9 +76,11 @@ class CTECacheWindowDataset(Dataset):
         # per-episode scalars live inside each npz and npz loads arrays lazily.
         manifest_path = self.cache_dir / "manifest.json"
         self.manifest = json.loads(manifest_path.read_text()) if manifest_path.is_file() else {}
+        require_camera_contract(self.manifest, str(manifest_path))
         entries = []
         for f in sorted(self.cache_dir.glob("episode_*.npz")):
             with np.load(f) as z:
+                require_camera_contract(z, str(f))
                 entries.append(
                     {
                         "file": f.name,
@@ -94,9 +98,10 @@ class CTECacheWindowDataset(Dataset):
             entries = [e for e in entries if e["episode_id"] in keep]
 
         # Deterministic episode-level split: windows from one episode never span
-        # train and val, which would otherwise leak.
-        order = np.random.default_rng(split_seed).permutation(len(entries))
-        n_val = max(1, int(round(len(entries) * val_ratio))) if val_ratio > 0 else 0
+        # train and val, which would otherwise leak. Match the policy
+        # split (Torch randperm, seed 42, ratio .03) rather than a separate NumPy split.
+        order = torch.randperm(len(entries), generator=torch.Generator().manual_seed(split_seed)).tolist()
+        n_val = int(round(len(entries) * val_ratio))
         if split == "val":
             chosen = [entries[i] for i in sorted(order[:n_val])]
         elif split == "train":

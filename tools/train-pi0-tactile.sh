@@ -12,7 +12,7 @@ pi0_parse_common "$@"
 PI0_TACTILE_CHECKPOINT=${PI0_TACTILE_CHECKPOINT:-$PI0_WORKSPACE/models/zeva/tactile_patch_encoder_19999.pt}
 [[ -f "$PI0_TACTILE_CHECKPOINT" ]] || { echo "Missing tactile checkpoint: $PI0_TACTILE_CHECKPOINT" >&2; exit 2; }
 pi0_prepare_pair_contract
-ARGS=(--set mode=zeva_tactile --set init_checkpoint="$PI0_BASE_CHECKPOINT" --set feature_cache=datasets/xhand_cte_features_v4 --set tactile_checkpoint="$PI0_TACTILE_CHECKPOINT" --set output_dir="$PI0_RUN_DIR" --set max_steps="$PI0_STEPS" --set batch_size="$PI0_BATCH_SIZE" --set grad_accum="$PI0_GRAD_ACCUM" --set seed="$PI0_SEED" --set learning_rate="$PI0_LEARNING_RATE" --set warmup_steps="$PI0_WARMUP_STEPS")
+ARGS=(--set mode=zeva_tactile --set init_checkpoint="$PI0_BASE_CHECKPOINT" --set feature_cache="$PI0_FEATURE_CACHE" --set tactile_checkpoint="$PI0_TACTILE_CHECKPOINT" --set output_dir="$PI0_RUN_DIR" --set max_steps="$PI0_STEPS" --set batch_size="$PI0_BATCH_SIZE" --set grad_accum="$PI0_GRAD_ACCUM" --set seed="$PI0_SEED" --set learning_rate="$PI0_LEARNING_RATE" --set warmup_steps="$PI0_WARMUP_STEPS")
 if [[ -n "$PI0_RESUME" ]]; then ARGS+=(--resume "$PI0_RESUME"); fi
 pi0_prepare_gpu
 pi0_print_or_exec "$PI0_WORKSPACE/configs/pi0/xhand_zeva_tactile.json" "${ARGS[@]}"

@@ -3,11 +3,11 @@
 import ast
 import json
 import os
-from pathlib import Path
 import subprocess
 import sys
 import types
 from fractions import Fraction
+from pathlib import Path
 
 import numpy as np
 import pyarrow as pa
@@ -16,6 +16,7 @@ import pytest
 import torch
 
 from pi0_zeva import data
+from pi0_zeva.camera import CAMERA_CONTRACT
 
 
 @pytest.fixture
@@ -120,22 +121,37 @@ def test_current_frame_only_action_order_padding_and_roundtrip(
 
     def decode(path, frame, image_size):
         calls.append((str(path), frame))
-        return torch.full((3, image_size, image_size), 0.5)
+        pixel = {
+            "observation.images.cam_front": 0.5,
+            "observation.images.cam_left": 0.25,
+            "observation.images.cam_right": -0.5,
+        }[path.parent.name]
+        return torch.full((3, image_size, image_size), pixel)
 
     monkeypatch.setattr(data, "_decode_current", decode)
     dataset = data.XHandPi0Dataset(root, stats_path, split_val_ratio=1 / 3)
     sample = dataset[3]
-    assert len(calls) == 2
+    assert len(calls) == 3
     assert all(frame == 3 for _, frame in calls)
-    assert "cam_left" in calls[0][0] and "cam_front" in calls[1][0]
+    assert [Path(path).parent.name for path, _ in calls] == [
+        "observation.images.cam_front",
+        "observation.images.cam_left",
+        "observation.images.cam_right",
+    ]
     assert sample["image_masks"] == {
         "base_0_rgb": True,
         "left_wrist_0_rgb": True,
-        "right_wrist_0_rgb": False,
+        "right_wrist_0_rgb": True,
     }
     assert sample["images"]["base_0_rgb"].shape == (3, 224, 224)
     torch.testing.assert_close(
         sample["images"]["base_0_rgb"], torch.full((3, 224, 224), 0.5)
+    )
+    torch.testing.assert_close(
+        sample["images"]["left_wrist_0_rgb"], torch.full((3, 224, 224), 0.25)
+    )
+    torch.testing.assert_close(
+        sample["images"]["right_wrist_0_rgb"], torch.full((3, 224, 224), -0.5)
     )
     assert sample["state"].shape == (32,)
     assert sample["actions"].shape == (32, 32)
@@ -204,12 +220,26 @@ def test_cte_uses_latest_completed_boundary_and_exact_task_context(
         np.savez(
             cache / f"features_{episode_id:06d}.npz",
             episode_id=episode_id,
+            camera_contract=CAMERA_CONTRACT,
             task_cluster="PressButton4Times",
             boundary_frame=np.arange(10) * 4,
             phase=np.broadcast_to(np.arange(10)[:, None], (10, 128)),
             effect=np.zeros((10, 4, 128)),
             effect_valid=np.zeros((10, 4), dtype=bool),
         )
+    (cache / "manifest.json").write_text(
+        json.dumps(
+            {
+                "camera_contract": CAMERA_CONTRACT,
+                "phase_dim": 128,
+                "effect_dim": 128,
+                "effect_history": 4,
+                "episodes": [
+                    {"episode_id": i, "file": f"features_{i:06d}.npz"} for i in range(6)
+                ],
+            }
+        )
+    )
     dataset = data.XHandPi0Dataset(
         root, stats_path, split_val_ratio=1 / 3, feature_cache=cache
     )

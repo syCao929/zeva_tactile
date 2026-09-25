@@ -214,11 +214,28 @@ datasets/press_button_4_times_merged_filtered/
 | embodiment | `ur7e_xhand` | `ur7e-xhand`（domain_id 23）|
 | action | `[18]` 关节位置 | `full18`（6 臂 + 12 手）|
 | state | `[1972]` | `joint18`（6 臂关节 + 12 手关节位置，与动作顺序一致）|
-| 相机 | `cam_left` / `cam_front` | left / **wrist**（源无腕部相机，前视按约定充当）|
+| 相机 | `cam_front` / `cam_left` / `cam_right` | 外部 / 外部 / **腕部**；三路全部输入，腕部在上、两个外部视角在下 |
 | fps | 15 | 15（非加载器默认的 20，必须显式传）|
 
 > `joint18` 是 proprio 输入。触觉版另取原始 state 的连续 30 帧窗口，经冻结 encoder 和 BIT 注入策略；
 > baseline 不启用该分支。触觉部署协议见 [触觉服务文档](cosmos-framework/docs/xhand_tactile_serving.md)。
+
+2026-09-25 三视角版本：旧的 `v3-joint18` 策略与 CTE v4 使用的是两路外部相机，
+不能直接作为新布局的训练结果。新版本依次训练三视角 Stage 1、生成
+`datasets/xhand_cte_cache_threeview`、训练 CTE、生成
+`datasets/xhand_cte_features_threeview`，再用原有 `tools/train-cosmos-baseline.sh`
+和 `tools/train-cosmos-tactile.sh` 训练 Stage 3，且使用新的 run/pair 名称。
+Stage 3 默认启用 PIM；每个查询使用同任务的另一条训练示范作为支持记忆，排除
+自身与验证集。该设定训练示范条件策略，不把独立示范冒充同场景失败重试。
+PIM 神经模块由策略损失训练，非参数记忆的写入、合并、检索不做梯度更新。
+
+相机输入预览（与训练共用拼图函数）：
+
+```bash
+python tools/preview_xhand_cameras.py \
+  --episode-root datasets/press_button_4_times/press_button_0 \
+  --episode-id 0 --time 3 --output plots/xhand-threeview-preview.png
+```
 
 ---
 

@@ -7,42 +7,35 @@ intermediate tactile frames.
 
 ## Server
 
-The current base policy is `runs/zeva/action_xhand/v3-joint18-20260925`, with
-`joint18` proprio. Select an actually saved checkpoint from its `checkpoints/`
-directory for both baseline and tactile stage-2 training. A new V3 tactile
-stage-2 checkpoint is **not yet listed as available** here; complete that training
-before deploying. A base-policy checkpoint cannot replace a tactile stage-2
-checkpoint. Retired V2 policies and their stage-2 descendants are not deployment
-inputs.
+The current recipes require newly trained three-view policy and CTE checkpoints.
+`cam_right` is wrist-mounted; `cam_front` and `cam_left` are external cameras.
+The shared compositor places the wrist above the two external views. The old
+`v3-joint18` / CTE v4 checkpoints used two external views and are not inputs for
+this version. Use `datasets/xhand_cte_cache_threeview` and
+`datasets/xhand_cte_features_threeview`; caches carry a checked camera contract.
 
-The shared resources remain CTE v4
-(`runs/zeva_cte/cte-v4-20260924/cte_step_003000.pt`),
-`datasets/xhand_cte_features_v4` and `datasets/xhand_task_context_bank.pt`.
-The shared VAE latent cache `datasets/xhand_cte_cache_v2` belongs to this CTE
-pipeline; its name does not refer to the retired V2 policy.
-
-After training, set `V3_TACTILE_CHECKPOINT` to its saved `iter_XXXXXXXX` directory.
-Export the local frozen encoder path before starting the server; it is required
+Set `THREEVIEW_TACTILE_CHECKPOINT` and `THREEVIEW_CTE_CHECKPOINT` to the newly
+trained artifacts. Export the local frozen encoder path before starting the server; it is required
 even when loading the policy checkpoint:
 
 ```bash
 source /path/to/zeva-work/env.sh
 export TACTILE_ENCODER_CHECKPOINT=/path/to/zeva-work/models/zeva/tactile_patch_encoder_19999.pt
-: "${V3_TACTILE_CHECKPOINT:?Select a saved tactile stage-2 checkpoint trained from V3 joint18}"
-test -f "$V3_TACTILE_CHECKPOINT/model/.metadata" || exit 1
+: "${THREEVIEW_TACTILE_CHECKPOINT:?Select a saved three-view tactile/PIM checkpoint}"
+test -f "$THREEVIEW_TACTILE_CHECKPOINT/model/.metadata" || exit 1
 cd /path/to/zeva-work/cosmos-framework
 PYTHONPATH=. python -m cosmos_framework.scripts.action_policy_server_xhand \
-  --checkpoint-path "$V3_TACTILE_CHECKPOINT" \
+  --checkpoint-path "$THREEVIEW_TACTILE_CHECKPOINT" \
   --allow-dcp-checkpoint --experiment action_policy_xhand_zeva_tactile \
   --experiment-overrides \
     "model.config.tokenizer.vae_path=$WAN_VAE_PATH" \
     "model.config.vlm_config.tokenizer.pretrained_model_name=$ZEVA_WORK/models/Qwen3-VL-8B-Instruct" \
   --action-stats-path "$XHAND_ACTION_STATS_PATH" \
-  --cte-checkpoint "$ZEVA_WORK/runs/zeva_cte/cte-v4-20260924/cte_step_003000.pt" \
+  --cte-checkpoint "$THREEVIEW_CTE_CHECKPOINT" \
   --task-context-bank "$ZEVA_WORK/datasets/xhand_task_context_bank.pt" \
   --task-context-instruction PressButton4Times \
   --domain-name ur7e-xhand --resolution 256 --action-dim 18 --proprio-dim 18 \
-  --conditioning-fps 15 --image-height 256 --image-width 512 \
+  --conditioning-fps 15 --image-height 576 --image-width 512 \
   --action-chunk-size 32 --history-length 0 --host 0.0.0.0 --port 8990
 ```
 
@@ -69,7 +62,8 @@ python /path/to/zeva-work/tools/run_xhand_tactile_client.py \
 authorized robot run and supply the rig's normal hardware options. The wrapper
 fixes 15 Hz, four controls per query, 30 consecutive tactile frames, synchronous
 queries, smoothing=1 and action scale=1. It maps the client's camera keys to the
-server's `observation.images.cam_left` and `observation.images.cam_front` keys.
+server's `observation.images.cam_front`, `observation.images.cam_left`, and
+`observation.images.cam_right` keys. All three are required.
 
 The original `StateHistoryBuffer` uses configurable sparse offsets and repeats
 the earliest observation before sufficient history exists. The wrapper replaces
@@ -113,3 +107,28 @@ history is supplied independently on every request, so the server never mixes
 sensor windows from different attempts. The helper
 `cosmos_framework.inference.xhand_tactile_client.TactileClientWindow` is available
 for clients with another control loop.
+
+## PIM demonstration conditioning and retries
+
+Stage 3 trains the PIM prompt encoder/projector/gate using an independent,
+same-task training demonstration, with 20% context dropout. Query trajectories
+and validation trajectories are excluded from support. No failure/retry labels
+are inferred from independent successful demonstrations.
+
+To match demonstration-conditioned training at deployment, pass
+`--pim-demonstration /path/to/features_000000.npz` to the server. Select a separate
+completed demonstration encoded with the same three-view CTE. Without a demo,
+PIM starts empty and fills only with observed completed effects.
+
+For retries, add `--pim-episode-id scene-001 --pim-attempt-id 0` **before** the
+client adapter's `--` separator. After restoring the same initial scene, rerun
+with the same scene ID and attempt 1, then 2, etc. A new scene uses a new ID and
+attempt 0. The server keeps PIM across attempts but resets CTE/BIT and tactile
+history; it clears PIM at a new scene. Without these IDs, every client reset
+starts a new PIM episode, preventing unrelated scenes from sharing memory.
+
+Direct clients send `pim_episode_id` and `pim_attempt_id` on each request. These
+are distinct from tactile `episode_id`, which identifies one continuous attempt.
+The server must remain running between retries. Memory survives attempts, not
+server restarts. PIM currently stores visual CTE effects; tactile still enters
+through the current effect residual branch.

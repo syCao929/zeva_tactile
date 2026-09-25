@@ -52,13 +52,16 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import time
 from pathlib import Path
 
 import numpy as np
 import torch
 
-_CACHE_VERSION = 1
+from cosmos_framework.data.generator.action.xhand_camera import CAMERA_CONTRACT, require_camera_contract
+
+_CACHE_VERSION = 2
 RAW_PER_LATENT = 4
 
 
@@ -74,6 +77,7 @@ def load_cte(checkpoint: Path, device: str):
     from cosmos_framework.model.zeva.checkpoint_io import normalize_cte_state_dict
 
     payload = torch.load(checkpoint, map_location="cpu", weights_only=False)
+    require_camera_contract(payload, str(checkpoint))
     cfg = dict(payload["model_config"])
     state = normalize_cte_state_dict(payload["model"])
     cfg["use_mamba"] = any("mamba" in key for key in state)
@@ -163,6 +167,7 @@ def rebuild_manifest(out_dir: Path, args: argparse.Namespace) -> int:
     entries = []
     for f in sorted(out_dir.glob("features_*.npz")):
         with np.load(f) as z:
+            require_camera_contract(z, str(f))
             entries.append(
                 {
                     "episode_id": int(z["episode_id"]),
@@ -176,6 +181,7 @@ def rebuild_manifest(out_dir: Path, args: argparse.Namespace) -> int:
         json.dumps(
             {
                 "version": _CACHE_VERSION,
+                "camera_contract": CAMERA_CONTRACT,
                 "cte_checkpoint": str(args.cte_checkpoint),
                 "latent_cache": str(args.latent_cache),
                 "window_latents": args.window_latents,
@@ -206,13 +212,21 @@ def main() -> int:
     ap.add_argument("--overwrite", action="store_true")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--rebuild-manifest", action="store_true", help="rescan the output dir and exit (no GPU)")
+    ap.add_argument("--shard-index", type=int, default=int(os.environ.get("RANK", "0")))
+    ap.add_argument("--num-shards", type=int, default=int(os.environ.get("WORLD_SIZE", "1")))
     args = ap.parse_args()
+    if not 0 <= args.shard_index < args.num_shards:
+        ap.error("shard-index must be in [0, num-shards)")
 
     out_dir = Path(args.output)
     out_dir.mkdir(parents=True, exist_ok=True)
     if args.rebuild_manifest:
         return rebuild_manifest(out_dir, args)
 
+    if args.device.startswith("cuda"):
+        local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+        torch.cuda.set_device(local_rank)
+        args.device = f"cuda:{local_rank}"
     model, cfg = load_cte(Path(args.cte_checkpoint), args.device)
     if cfg.image_channels != 48:
         raise RuntimeError(f"CTE expects image_channels={cfg.image_channels}, the latent cache stores 48")
@@ -223,32 +237,39 @@ def main() -> int:
         raise FileNotFoundError(f"no episode_*.npz under {cache_dir}; run vae_cache first")
     if args.limit > 0:
         files = files[: args.limit]
+    files = files[args.shard_index::args.num_shards]
     print(f"CTE: {sum(p.numel() for p in model.parameters()) / 1e6:.2f}M params, "
           f"window_latents={args.window_latents}")
     print(f"encoding {len(files)} episodes -> {out_dir}")
 
     by_id: dict[int, dict] = {}
-    manifest_path = out_dir / "manifest.json"
+    manifest_path = out_dir / ("manifest.json" if args.num_shards == 1 else f"manifest.rank{args.shard_index}.json")
     if manifest_path.is_file():
-        for e in json.loads(manifest_path.read_text()).get("episodes", []):
+        manifest = json.loads(manifest_path.read_text())
+        require_camera_contract(manifest, str(manifest_path))
+        for e in manifest.get("episodes", []):
             by_id[int(e["episode_id"])] = e
 
     t0 = time.perf_counter()
     done = skipped = 0
     for f in files:
         with np.load(f) as z:
+            require_camera_contract(z, str(f))
             episode_id = int(z["episode_id"])
             task_cluster = str(z["task_cluster"])
             latents = torch.from_numpy(z["latents"])
             actions = torch.from_numpy(z["actions"])
         out_file = out_dir / f"features_{episode_id:06d}.npz"
         if out_file.exists() and not args.overwrite:
+            with np.load(out_file) as existing:
+                require_camera_contract(existing, str(out_file))
             skipped += 1
             continue
 
         phase, effect, effect_valid = encode_episode(model, cfg, latents, actions, args.window_latents)
         np.savez_compressed(
             out_file,
+            camera_contract=np.array(CAMERA_CONTRACT),
             phase=phase,
             effect=effect,
             effect_valid=effect_valid,
@@ -270,6 +291,7 @@ def main() -> int:
             json.dumps(
                 {
                     "version": _CACHE_VERSION,
+                "camera_contract": CAMERA_CONTRACT,
                     "cte_checkpoint": str(args.cte_checkpoint),
                     "latent_cache": str(args.latent_cache),
                     "window_latents": args.window_latents,

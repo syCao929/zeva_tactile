@@ -2,7 +2,7 @@
 
 State/action normalization is fitted on unique frames of training episodes only.
 The split and ``length - horizon`` windows deliberately match the Cosmos XHand
-baseline. Camera names are pi0 slots: cam_front is not a physical wrist camera.
+baseline. Three OpenPI slots receive front/left external views and right wrist.
 Heavy dependencies are imported only when their functionality is requested.
 """
 
@@ -19,14 +19,45 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
+from pi0_zeva.camera import CAMERAS, require_camera_contract
+
 STATE_INDICES = tuple(range(6)) + tuple(range(28, 52, 2))
 JOINT_DIM = 18
 PADDED_DIM = 32
 FPS = 15
-CAMERAS = {
-    "base_0_rgb": "observation.images.cam_left",
-    "left_wrist_0_rgb": "observation.images.cam_front",
-}
+
+
+def index_feature_cache(directory: Path) -> dict[int, Path]:
+    """Validate the declared three-view cache and every episode's camera version."""
+    import numpy as np
+
+    directory = Path(directory)
+    manifest_path = directory / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    require_camera_contract(manifest, manifest_path)
+    if any(
+        manifest.get(key) != value
+        for key, value in (
+            ("phase_dim", 128),
+            ("effect_dim", 128),
+            ("effect_history", 4),
+        )
+    ):
+        raise ValueError(f"CTE feature dimensions mismatch: {manifest_path}")
+    files = {}
+    for entry in manifest["episodes"]:
+        path = directory / entry["file"]
+        key = int(entry["episode_id"])
+        if key in files:
+            raise ValueError(f"Duplicate CTE episode {key} in {directory}")
+        with np.load(path, allow_pickle=False) as data:
+            require_camera_contract(data, path)
+            if int(data["episode_id"]) != key:
+                raise ValueError(f"CTE episode ID differs from manifest: {path}")
+        files[key] = path
+    if not files:
+        raise ValueError(f"Empty CTE feature cache: {directory}")
+    return files
 
 
 @dataclass(frozen=True)
@@ -380,21 +411,13 @@ class XHandPi0Dataset:
             self._index_features(Path(feature_cache))
 
     def _index_features(self, directory: Path):
-        import numpy as np
-
         if len({e.root for e in self.episodes}) > 1:
             raise ValueError(
                 "Legacy CTE caches lack root IDs; use one source root to avoid episode collisions"
             )
         if not directory.is_dir():
             raise FileNotFoundError(f"No CTE feature cache at {directory}")
-        self._feature_files = {}
-        for path in sorted(directory.glob("features_*.npz")):
-            with np.load(path, allow_pickle=False) as data:
-                key = int(data["episode_id"])
-            if key in self._feature_files:
-                raise ValueError(f"Duplicate CTE episode {key} in {directory}")
-            self._feature_files[key] = path
+        self._feature_files = index_feature_cache(directory)
         missing = {e.episode_id for e in self.episodes} - self._feature_files.keys()
         if missing:
             raise ValueError(f"CTE cache missing episodes: {sorted(missing)}")
@@ -479,7 +502,6 @@ class XHandPi0Dataset:
             slot: _decode_current(path, frame, self.image_size)
             for slot, path in episode.video_paths.items()
         }
-        images["right_wrist_0_rgb"] = torch.zeros_like(images["base_0_rgb"])
         result = {
             "images": images,
             "image_masks": {slot: slot in CAMERAS for slot in images},

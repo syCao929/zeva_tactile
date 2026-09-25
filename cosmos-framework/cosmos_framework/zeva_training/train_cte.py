@@ -49,22 +49,27 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import time
 from pathlib import Path
 
 import torch
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel
+from torch.utils.data.distributed import DistributedSampler
 
+# Must match the Wan VAE's latent channel count — measured, not assumed; see
+# probe_vae (the encoder's docstring is stale and the server asserts at runtime).
+from cosmos_framework.data.generator.action.xhand_camera import CAMERA_CONTRACT, require_camera_contract
 from cosmos_framework.model.zeva import (
-    CTELossConfig,
     CausalTransitionEncoder,
     CausalTransitionEncoderConfig,
+    CTELossConfig,
     causal_transition_encoder_loss,
 )
 from cosmos_framework.model.zeva.checkpoint_io import normalize_cte_state_dict
 from cosmos_framework.zeva_training.cte_dataset import CTECacheWindowDataset, collate_cte
 
-# Must match the Wan VAE's latent channel count — measured, not assumed; see
-# probe_vae (the encoder's docstring is stale and the server asserts at runtime).
 IMAGE_CHANNELS = 48
 ACTION_DIM = 18
 
@@ -82,6 +87,7 @@ def build_encoder() -> CausalTransitionEncoder:
 
 def save_cte(model: CausalTransitionEncoder, path: Path) -> None:
     payload = {
+        "camera_contract": CAMERA_CONTRACT,
         "model_config": model.cfg.to_dict(),
         # Idempotent key-name compatibility shim; a no-op for current names.
         "model": normalize_cte_state_dict(model.state_dict()),
@@ -91,6 +97,26 @@ def save_cte(model: CausalTransitionEncoder, path: Path) -> None:
             raise RuntimeError(f"state dict carries a wrapper prefix ({key}); the server loads strict")
     path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(payload, path)
+
+
+class CTETrainingObjective(torch.nn.Module):
+    """Keep loss computation inside DDP so unused auxiliary heads are detected."""
+
+    def __init__(self, encoder, loss_config):
+        super().__init__()
+        self.encoder = encoder
+        self.loss_config = loss_config
+
+    def forward(self, frames, actions, valid, transition_valid, semantic_ids):
+        with torch.autocast(device_type=frames.device.type, dtype=torch.bfloat16,
+                            enabled=frames.device.type == "cuda"):
+            outputs = self.encoder(frames, actions, valid, transition_valid)
+        outputs = {k: v.float() if torch.is_tensor(v) and v.is_floating_point() else v
+                   for k, v in outputs.items()}
+        losses = causal_transition_encoder_loss(outputs, actions, valid, semantic_ids, self.loss_config)
+        # Only total participates in backward. In particular retrieval can be unused
+        # for single-task batches, and EMA targets never receive gradients.
+        return {k: v if k == "total" else v.detach() for k, v in losses.items()}
 
 
 def main() -> int:
@@ -104,7 +130,7 @@ def main() -> int:
     ap.add_argument("--weight-decay", type=float, default=0.05)
     ap.add_argument("--grad-clip", type=float, default=1.0)
     ap.add_argument("--num-workers", type=int, default=4)
-    ap.add_argument("--val-ratio", type=float, default=0.05)
+    ap.add_argument("--val-ratio", type=float, default=0.03)
     ap.add_argument("--save-every", type=int, default=100)
     ap.add_argument("--log-every", type=int, default=10)
     ap.add_argument("--seed", type=int, default=42)
@@ -126,6 +152,14 @@ def main() -> int:
     ap.add_argument("--effect-align-weight", type=float, default=None)
     args = ap.parse_args()
 
+    world_size = int(os.environ.get("WORLD_SIZE", "1"))
+    rank = int(os.environ.get("RANK", "0"))
+    local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+    if world_size > 1:
+        if args.device.startswith("cuda"):
+            torch.cuda.set_device(local_rank)
+            args.device = f"cuda:{local_rank}"
+        dist.init_process_group(backend="nccl" if args.device.startswith("cuda") else "gloo")
     torch.manual_seed(args.seed)
     out_dir = Path(args.output)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -133,6 +167,8 @@ def main() -> int:
     latest_path = out_dir / "cte_latest.pt"
 
     def log(msg: str) -> None:
+        if rank != 0:
+            return
         line = f"[{time.strftime('%F %T')}] {msg}"
         print(line, flush=True)
         with log_path.open("a") as fh:
@@ -144,12 +180,17 @@ def main() -> int:
     val_ds = CTECacheWindowDataset(
         args.cache_dir, window_latents=args.window_latents, split="val", val_ratio=args.val_ratio
     )
+    sampler = DistributedSampler(train_ds, num_replicas=world_size, rank=rank, seed=args.seed) if world_size > 1 else None
     train_loader = torch.utils.data.DataLoader(
-        train_ds, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
+        train_ds, batch_size=args.batch_size, shuffle=sampler is None, sampler=sampler, num_workers=args.num_workers,
         collate_fn=collate_cte, drop_last=True, persistent_workers=args.num_workers > 0,
     )
+    if len(train_loader) == 0:
+        raise ValueError("CTE training dataset is too small for batch-size * world-size")
+    # No duplicated validation samples; validation has no DDP forward collectives.
+    val_subset = torch.utils.data.Subset(val_ds, range(rank, len(val_ds), world_size))
     val_loader = torch.utils.data.DataLoader(
-        val_ds, batch_size=args.batch_size, shuffle=False, num_workers=0, collate_fn=collate_cte,
+        val_subset, batch_size=args.batch_size, shuffle=False, num_workers=0, collate_fn=collate_cte,
     )
 
     model = build_encoder().to(args.device)
@@ -161,6 +202,7 @@ def main() -> int:
     start_step = 0
     if args.resume and latest_path.is_file():
         payload = torch.load(latest_path, map_location="cpu", weights_only=False)
+        require_camera_contract(payload, str(latest_path))
         model.load_state_dict(payload["model"])
         if "optimizer" in payload:
             optimizer.load_state_dict(payload["optimizer"])
@@ -172,7 +214,8 @@ def main() -> int:
     log(
         f"cache={args.cache_dir} window_latents={args.window_latents} "
         f"train_windows={len(train_ds)} val_windows={len(val_ds)} "
-        f"params={n_params/1e6:.2f}M device={args.device} start_step={start_step}"
+        f"params={n_params/1e6:.2f}M device={args.device} start_step={start_step} "
+        f"world_size={world_size} per_gpu_batch={args.batch_size} global_batch={args.batch_size * world_size}"
     )
 
     loss_cfg = CTELossConfig()
@@ -194,17 +237,17 @@ def main() -> int:
         )
     )
 
-    def run_batch(batch: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
-        frames = batch["frames"].to(args.device, non_blocking=True)
-        actions = batch["transition_actions"].to(args.device, non_blocking=True)
-        valid = batch["valid_mask"].to(args.device, non_blocking=True)
-        tv = batch["transition_valid"].to(args.device, non_blocking=True)
-        sids = batch["semantic_ids"].to(args.device, non_blocking=True)
-        with torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=args.device.startswith("cuda")):
-            outputs = model(frames, actions, valid, tv)
-        # Loss in fp32 — the contrastive temperatures make bf16 unusable here.
-        outputs = {k: (v.float() if torch.is_tensor(v) and v.is_floating_point() else v) for k, v in outputs.items()}
-        return causal_transition_encoder_loss(outputs, actions, valid, sids, loss_cfg)
+    objective = CTETrainingObjective(model, loss_cfg)
+    training_objective = (
+        DistributedDataParallel(objective, device_ids=[local_rank] if args.device.startswith("cuda") else None,
+                                find_unused_parameters=True, broadcast_buffers=False)
+        if world_size > 1 else objective
+    )
+
+    def run_batch(batch, *, training=True):
+        values = [batch[name].to(args.device, non_blocking=True) for name in
+                  ("frames", "transition_actions", "valid_mask", "transition_valid", "semantic_ids")]
+        return (training_objective if training else objective)(*values)
 
     @torch.no_grad()
     def evaluate() -> dict[str, float]:
@@ -212,22 +255,33 @@ def main() -> int:
         agg: dict[str, float] = {}
         n = 0
         for batch in val_loader:
-            losses = run_batch(batch)
+            losses = run_batch(batch, training=False)
+            count = batch["frames"].shape[0]
             for k, v in losses.items():
-                agg[k] = agg.get(k, 0.0) + float(v)
-            n += 1
+                agg[k] = agg.get(k, 0.0) + float(v) * count
+            n += count
+        if world_size > 1:
+            summaries = [None] * world_size
+            dist.all_gather_object(summaries, (agg, n))
+            agg = {key: sum(item.get(key, 0.0) for item, _ in summaries)
+                   for key in {key for item, _ in summaries for key in item}}
+            n = sum(count for _, count in summaries)
         model.train()
         return {k: v / max(n, 1) for k, v in agg.items()}
 
     model.train()
     step = start_step
     t_start = time.perf_counter()
+    epoch = 0
     data_iter = iter(train_loader)
 
     while step < args.steps:
         try:
             batch = next(data_iter)
         except StopIteration:
+            epoch += 1
+            if sampler is not None:
+                sampler.set_epoch(epoch)
             data_iter = iter(train_loader)
             continue
 
@@ -243,6 +297,10 @@ def main() -> int:
 
         step += 1
         if step % args.log_every == 0 or step == start_step + 1:
+            if world_size > 1:
+                values = torch.stack([losses[k].detach() for k in losses])
+                dist.all_reduce(values)
+                losses = dict(zip(losses, values / world_size))
             el = time.perf_counter() - t_start
             done = step - start_step
             log(
@@ -257,17 +315,21 @@ def main() -> int:
 
         if step % args.save_every == 0 or step == args.steps:
             ckpt = out_dir / f"cte_step_{step:06d}.pt"
-            save_cte(model, ckpt)
-            payload = {"model_config": model.cfg.to_dict(),
-                       "model": normalize_cte_state_dict(model.state_dict()),
-                       "optimizer": optimizer.state_dict(), "step": step}
-            torch.save(payload, latest_path)
+            if rank == 0:
+                save_cte(model, ckpt)
+                payload = {"camera_contract": CAMERA_CONTRACT, "model_config": model.cfg.to_dict(),
+                           "model": normalize_cte_state_dict(model.state_dict()),
+                           "optimizer": optimizer.state_dict(), "step": step}
+                torch.save(payload, latest_path)
             val = evaluate()
             log(f"  saved {ckpt.name}  val_total={val.get('total', float('nan')):.4f}")
-            with (out_dir / "metrics.jsonl").open("a") as fh:
-                fh.write(json.dumps({"step": step, **{k: float(v) for k, v in val.items()}}) + "\n")
+            if rank == 0:
+                with (out_dir / "metrics.jsonl").open("a") as fh:
+                    fh.write(json.dumps({"step": step, **{k: float(v) for k, v in val.items()}}) + "\n")
 
     log(f"done. final checkpoint: {out_dir / f'cte_step_{step:06d}.pt'}")
+    if world_size > 1:
+        dist.destroy_process_group()
     return 0
 
 

@@ -1,9 +1,9 @@
 {
   "extends": "xhand_baseline.json",
   "mode": "zeva",
-  "init_checkpoint": "runs/pi0/action_xhand/v1-joint18/checkpoints/latest.json",
-  "feature_cache": "datasets/xhand_cte_features_v4",
-  "output_dir": "runs/pi0/zeva_xhand/v1-visual",
+  "init_checkpoint": "runs/pi0/action_xhand/v2-threeview-joint18/checkpoints/latest.json",
+  "feature_cache": "datasets/xhand_cte_features_threeview",
+  "output_dir": "runs/pi0/zeva_xhand/v2-threeview-visual",
   "learning_rate": 0.0002,
   "batch_size": 2,
   "grad_accum": 7,

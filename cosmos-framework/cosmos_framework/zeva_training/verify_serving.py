@@ -86,6 +86,7 @@ def synthetic_observation(rng: np.random.Generator, *, state_dim: int, prompt: s
         "prompt": prompt,
         "observation.images.cam_left": left,
         "observation.images.cam_front": front,
+        "observation.images.cam_right": np.flip(front, axis=0).copy(),
         "observation/state": state,
     }
 

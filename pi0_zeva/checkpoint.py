@@ -12,6 +12,8 @@ import numpy as np
 import torch
 from safetensors.torch import load_file, save_file, save_model
 
+from pi0_zeva.camera import require_policy_camera
+
 FORMAT_VERSION = 1
 
 
@@ -25,6 +27,7 @@ def resolve_checkpoint(path: str | Path) -> Path:
     metadata = json.loads((path / "manifest.json").read_text())
     if metadata.get("format_version") != FORMAT_VERSION:
         raise ValueError(f"Unsupported π0 Zeva checkpoint: {path}")
+    require_policy_camera(metadata["config"], path)
     return path
 
 
@@ -83,6 +86,7 @@ def save_checkpoint(
     norm_sha256: str,
     artifact_hashes: dict | None = None,
 ) -> Path:
+    require_policy_camera(config, "checkpoint being saved")
     directory = Path(output_dir) / "checkpoints"
     directory.mkdir(parents=True, exist_ok=True)
     name = f"step_{step:08d}"

@@ -8,10 +8,36 @@
 
 第一版迁移 CTE/BIT → PBD 动作先验 → π0 action expert 的路径。它不新增 prefix token，也不迁移 Cosmos 的全局 prefix、PIM 或未来视频生成路径。因此这里的 `zeva` 是 **Zeva 的动作先验迁移版本**，不能将其标为完整原始 Zeva 的逐项复现。
 
+## 三视角版本（2026-09-26）
+
+新训练配置和检查点记录 `camera_contract=xhand_three_view_v2_wrist_right` 与完整 π0 相机映射。
+初始化、续训、推理均拒绝缺少版本或映射不符的旧 π0 检查点。CTE manifest 和每个 episode NPZ
+都必须符合三视角版本；旧 `xhand_cte_features_v4` 不再作为默认输入。
+关节归一化统计不依赖图像，同一数据集与划分可沿用已有统计。
+
+两个 Stage 3 入口（脚本旧称 Stage 2）均支持 `--cte-cache DIR`，也可设置 `PI0_FEATURE_CACHE`。
+默认目录是 `datasets/xhand_cte_features_threeview`；使用串行 Cosmos 脚本产物时，显式传入实际目录：
+
+```bash
+bash tools/train-pi0-baseline.sh \
+  --base-checkpoint runs/pi0/comparison/pi0-threeview-base/checkpoints/step_00005000 \
+  --cte-cache runs/pipelines/cosmos-threeview-v1/cte_features \
+  --pair-name pi0-threeview-s42 --run-name baseline
+
+bash tools/train-pi0-tactile.sh \
+  --base-checkpoint runs/pi0/comparison/pi0-threeview-base/checkpoints/step_00005000 \
+  --cte-cache runs/pipelines/cosmos-threeview-v1/cte_features \
+  --pair-name pi0-threeview-s42 --run-name tactile
+```
+
+上述 π0 基座需要先用 `bash tools/train-pi0-base.sh --run-name pi0-threeview-base` 训练。
+两个分支的 pair contract 同时锁定相机映射、缓存路径与 manifest 哈希。
+本次修改未接入 π0 PIM，下面的历史验证记录仍对应当时的双视角版本。
+
 ## 数据和损失
 
 - 同一份 `press_button_4_times_merged_filtered` 数据，同一 episode 划分：seed 42，验证比例 0.03。
-- 当前 `cam_left` → `base_0_rgb`；当前 `cam_front` → `left_wrist_0_rgb`。后者只是模型槽位名称，源设备没有腕部相机。第三相机槽置零、mask=false。
+- 三路真实图像：`cam_front` → `base_0_rgb`；`cam_left` → `left_wrist_0_rgb`；腕部 `cam_right` → `right_wrist_0_rgb`。三个 mask 均为 true；第二槽的 wrist 名称只是 OpenPI 接口名，该相机实际是外部视角。
 - 只解码当前画面；π0 不读取未来视频。PyAV 按 PTS 定位，检查时间误差不超过 0.0002 秒。
 - state 为 `state[:6] + state[28:52:2]`，动作是相同18关节的绝对位置，单位弧度。
 - state/action 分别用**训练 episode** 的逐帧 mean/std 做 z-score，再补零至32维。动作输出裁回18维并反归一化。不能拿 Cosmos 的 minmax stats 代替。
@@ -113,7 +139,7 @@ PI0_NPROC=8 bash tools/run-pi0-xhand.sh --config configs/pi0/xhand_zeva_tactile.
 
 ```bash
 PI0_NPROC=8 bash tools/run-pi0-xhand.sh \
-  --resume runs/pi0/action_xhand/v1-joint18/checkpoints/latest.json
+  --resume runs/pi0/action_xhand/v2-threeview-joint18/checkpoints/latest.json
 ```
 
 独立动作采样评测会输出机械臂/手关节各自的 MAE、RMSE，单位为弧度。训练的flow loss不等同于这些误差，也不能把不同骨干的总loss直接比较。
@@ -121,7 +147,7 @@ PI0_NPROC=8 bash tools/run-pi0-xhand.sh \
 ```bash
 PYTHONPATH=.:cosmos-framework JAX_PLATFORMS=cpu LD_LIBRARY_PATH='' \
   envs/pi0/bin/python -m pi0_zeva.inference \
-  --checkpoint runs/pi0/action_xhand/v1-joint18/checkpoints/latest.json \
+  --checkpoint runs/pi0/action_xhand/v2-threeview-joint18/checkpoints/latest.json \
   --max-samples 32 --num-steps 10 --output plots/pi0_joint18_eval.json
 ```
 
