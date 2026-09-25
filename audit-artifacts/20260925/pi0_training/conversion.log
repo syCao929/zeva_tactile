@@ -1,0 +1,5 @@
+Restoring all Orbax arrays on CPU as float32
+Building the official CPU model for shape and alias validation
+Checking every prediction weight, shape, finite value and loaded value
+Saving and reading back all safetensors entries
+Strict conversion complete: /workspace/mnt/sqzhang26/zeva-work/models/pi0_base_pytorch

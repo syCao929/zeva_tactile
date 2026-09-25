@@ -1,0 +1,154 @@
+
+################ 会话开始 2026-09-21 17:28:21  [CTE] ################
+# run=cte-v1-20260921  steps=500  save_every=100  batch=8  lr=1e-4
+# cache=/workspace/mnt/sqzhang26/zeva-work/datasets/xhand_cte_cache  window_latents=17
+[2026-09-21 17:28:42] --resume given but /workspace/mnt/sqzhang26/zeva-work/runs/zeva_cte/cte-v1-20260921/cte_latest.pt does not exist; starting fresh
+[2026-09-21 17:28:42] cache=/workspace/mnt/sqzhang26/zeva-work/datasets/xhand_cte_cache window_latents=17 train_windows=9748 val_windows=519 params=9.49M device=cuda start_step=0
+/workspace/mnt/sqzhang26/zeva-work/cosmos-framework/cosmos_framework/zeva_training/train_cte.py:218: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  f"step {step}/{args.steps}  total={float(losses['total']):.4f} "
+[2026-09-21 17:28:44] step 1/500  total=2.8892 action=0.9105 vision=0.3574 task=1.9463 phase=0.0035 effect=4.9270 (contrast=3.843 var=0.975)  2.12s/step
+[2026-09-21 17:28:45] step 10/500  total=1.7895 action=0.1650 vision=0.0786 task=1.9460 phase=0.0043 effect=4.6251 (contrast=3.562 var=0.957)  0.29s/step
+[2026-09-21 17:28:46] step 20/500  total=1.6220 action=0.0704 vision=0.0302 task=1.9459 phase=0.0044 effect=4.5268 (contrast=3.465 var=0.976)  0.22s/step
+[2026-09-21 17:28:48] step 30/500  total=1.5557 action=0.0317 vision=0.0070 task=1.9459 phase=0.0040 effect=4.5100 (contrast=3.472 var=0.976)  0.21s/step
+[2026-09-21 17:28:50] step 40/500  total=1.5609 action=0.0375 vision=0.0035 task=1.9459 phase=0.0030 effect=4.5217 (contrast=3.504 var=0.975)  0.20s/step
+[2026-09-21 17:28:52] step 50/500  total=1.5224 action=0.0199 vision=0.0029 task=1.9459 phase=0.0010 effect=4.4411 (contrast=3.437 var=0.975)  0.20s/step
+[2026-09-21 17:28:53] step 60/500  total=1.4998 action=0.0240 vision=0.0045 task=1.9459 phase=0.0006 effect=4.3280 (contrast=3.338 var=0.968)  0.19s/step
+[2026-09-21 17:28:55] step 70/500  total=1.4735 action=0.0122 vision=0.0037 task=1.9459 phase=0.0007 effect=4.2731 (contrast=3.286 var=0.968)  0.19s/step
+[2026-09-21 17:28:57] step 80/500  total=1.4368 action=0.0153 vision=0.0029 task=1.9459 phase=0.0003 effect=4.1178 (contrast=3.132 var=0.964)  0.19s/step
+[2026-09-21 17:28:58] step 90/500  total=1.3788 action=0.0151 vision=0.0037 task=1.9459 phase=0.0004 effect=3.8833 (contrast=2.883 var=0.961)  0.19s/step
+[2026-09-21 17:29:00] step 100/500  total=1.3573 action=0.0151 vision=0.0032 task=1.9459 phase=0.0004 effect=3.7992 (contrast=2.790 var=0.954)  0.18s/step
+[2026-09-21 17:29:44]   saved cte_step_000100.pt  val_total=1.3795
+[2026-09-21 17:29:45] step 110/500  total=1.3561 action=0.0108 vision=0.0022 task=1.9459 phase=0.0003 effect=3.8155 (contrast=2.801 var=0.960)  0.57s/step
+[2026-09-21 17:29:46] step 120/500  total=1.3576 action=0.0220 vision=0.0036 task=1.9459 phase=0.0003 effect=3.7711 (contrast=2.766 var=0.960)  0.54s/step
+[2026-09-21 17:29:48] step 130/500  total=1.3249 action=0.0182 vision=0.0032 task=1.9459 phase=0.0003 effect=3.6570 (contrast=2.659 var=0.961)  0.51s/step
+[2026-09-21 17:29:50] step 140/500  total=1.3215 action=0.0149 vision=0.0035 task=1.9459 phase=0.0004 effect=3.6557 (contrast=2.654 var=0.962)  0.49s/step
+[2026-09-21 17:29:52] step 150/500  total=1.2510 action=0.0185 vision=0.0015 task=1.9459 phase=0.0000 effect=3.3671 (contrast=2.387 var=0.938)  0.47s/step
+[2026-09-21 17:29:53] step 160/500  total=1.3077 action=0.0116 vision=0.0023 task=1.9459 phase=0.0002 effect=3.6184 (contrast=2.621 var=0.952)  0.45s/step
+[2026-09-21 17:29:55] step 170/500  total=1.2598 action=0.0176 vision=0.0022 task=1.9459 phase=0.0002 effect=3.4031 (contrast=2.405 var=0.957)  0.43s/step
+[2026-09-21 17:29:57] step 180/500  total=1.2704 action=0.0201 vision=0.0017 task=1.9459 phase=0.0001 effect=3.4377 (contrast=2.434 var=0.959)  0.42s/step
+[2026-09-21 17:29:59] step 190/500  total=1.2795 action=0.0187 vision=0.0022 task=1.9459 phase=0.0002 effect=3.4778 (contrast=2.479 var=0.958)  0.40s/step
+[2026-09-21 17:30:00] step 200/500  total=1.2821 action=0.0082 vision=0.0015 task=1.9459 phase=0.0003 effect=3.5325 (contrast=2.532 var=0.962)  0.39s/step
+[2026-09-21 17:30:44]   saved cte_step_000200.pt  val_total=1.3124
+[2026-09-21 17:30:45] step 210/500  total=1.2814 action=0.0145 vision=0.0025 task=1.9459 phase=0.0002 effect=3.5008 (contrast=2.497 var=0.965)  0.59s/step
+[2026-09-21 17:30:46] step 220/500  total=1.2987 action=0.0474 vision=0.0025 task=1.9459 phase=0.0002 effect=3.4382 (contrast=2.443 var=0.952)  0.57s/step
+[2026-09-21 17:30:48] step 230/500  total=1.2428 action=0.0157 vision=0.0017 task=1.9459 phase=0.0001 effect=3.3448 (contrast=2.371 var=0.936)  0.55s/step
+[2026-09-21 17:30:50] step 240/500  total=1.2309 action=0.0138 vision=0.0021 task=1.9459 phase=0.0001 effect=3.3034 (contrast=2.309 var=0.960)  0.53s/step
+[2026-09-21 17:30:52] step 250/500  total=1.2327 action=0.0155 vision=0.0021 task=1.9459 phase=0.0003 effect=3.3033 (contrast=2.307 var=0.959)  0.52s/step
+[2026-09-21 17:30:53] step 260/500  total=1.2162 action=0.0259 vision=0.0027 task=1.9459 phase=0.0001 effect=3.1935 (contrast=2.201 var=0.954)  0.51s/step
+[2026-09-21 17:30:55] step 270/500  total=1.2325 action=0.0103 vision=0.0021 task=1.9459 phase=0.0002 effect=3.3235 (contrast=2.328 var=0.962)  0.49s/step
+[2026-09-21 17:30:56] step 280/500  total=1.2166 action=0.0084 vision=0.0017 task=1.9459 phase=0.0000 effect=3.2690 (contrast=2.273 var=0.961)  0.48s/step
+[2026-09-21 17:30:58] step 290/500  total=1.2369 action=0.0292 vision=0.0027 task=1.9459 phase=0.0002 effect=3.2633 (contrast=2.266 var=0.960)  0.47s/step
+[2026-09-21 17:31:00] step 300/500  total=1.2299 action=0.0116 vision=0.0022 task=1.9459 phase=0.0002 effect=3.3072 (contrast=2.310 var=0.962)  0.46s/step
+[2026-09-21 17:31:44]   saved cte_step_000300.pt  val_total=1.2834
+[2026-09-21 17:31:45] step 310/500  total=1.2350 action=0.0113 vision=0.0019 task=1.9459 phase=0.0001 effect=3.3301 (contrast=2.338 var=0.957)  0.59s/step
+[2026-09-21 17:31:46] step 320/500  total=1.2252 action=0.0104 vision=0.0023 task=1.9459 phase=0.0001 effect=3.2929 (contrast=2.299 var=0.957)  0.58s/step
+[2026-09-21 17:31:48] step 330/500  total=1.2033 action=0.0083 vision=0.0019 task=1.9459 phase=0.0001 effect=3.2160 (contrast=2.226 var=0.961)  0.57s/step
+[2026-09-21 17:31:50] step 340/500  total=1.2031 action=0.0144 vision=0.0021 task=1.9459 phase=0.0001 effect=3.1896 (contrast=2.196 var=0.962)  0.55s/step
+[2026-09-21 17:31:52] step 350/500  total=1.1973 action=0.0203 vision=0.0026 task=1.9459 phase=0.0001 effect=3.1408 (contrast=2.155 var=0.956)  0.54s/step
+[2026-09-21 17:31:53] step 360/500  total=1.1977 action=0.0087 vision=0.0016 task=1.9459 phase=0.0000 effect=3.1927 (contrast=2.200 var=0.963)  0.53s/step
+[2026-09-21 17:31:55] step 370/500  total=1.1841 action=0.0092 vision=0.0023 task=1.9459 phase=0.0002 effect=3.1338 (contrast=2.144 var=0.961)  0.52s/step
+[2026-09-21 17:31:57] step 380/500  total=1.1899 action=0.0088 vision=0.0022 task=1.9459 phase=0.0001 effect=3.1584 (contrast=2.170 var=0.956)  0.51s/step
+[2026-09-21 17:31:59] step 390/500  total=1.1898 action=0.0091 vision=0.0028 task=1.9459 phase=0.0004 effect=3.1545 (contrast=2.167 var=0.960)  0.50s/step
+[2026-09-21 17:32:00] step 400/500  total=1.1840 action=0.0088 vision=0.0035 task=1.9459 phase=0.0002 effect=3.1297 (contrast=2.141 var=0.961)  0.50s/step
+[2026-09-21 17:32:44]   saved cte_step_000400.pt  val_total=1.2617
+[2026-09-21 17:32:45] step 410/500  total=1.1815 action=0.0094 vision=0.0032 task=1.9459 phase=0.0009 effect=3.1185 (contrast=2.130 var=0.962)  0.59s/step
+[2026-09-21 17:32:46] step 420/500  total=1.1509 action=0.0093 vision=0.0027 task=1.9459 phase=0.0007 effect=2.9985 (contrast=2.012 var=0.962)  0.58s/step
+[2026-09-21 17:32:48] step 430/500  total=1.1494 action=0.0129 vision=0.0043 task=1.9459 phase=0.0013 effect=2.9717 (contrast=1.988 var=0.959)  0.57s/step
+[2026-09-21 17:32:50] step 440/500  total=1.2028 action=0.0113 vision=0.0030 task=1.9459 phase=0.0002 effect=3.1972 (contrast=2.211 var=0.965)  0.56s/step
+[2026-09-21 17:32:52] step 450/500  total=1.1466 action=0.0063 vision=0.0035 task=1.9459 phase=0.0020 effect=2.9895 (contrast=2.005 var=0.962)  0.56s/step
+[2026-09-21 17:32:53] step 460/500  total=1.1959 action=0.0196 vision=0.0066 task=1.9459 phase=0.0004 effect=3.1217 (contrast=2.135 var=0.964)  0.55s/step
+[2026-09-21 17:32:55] step 470/500  total=1.1492 action=0.0109 vision=0.0052 task=1.9459 phase=0.0015 effect=2.9752 (contrast=1.992 var=0.958)  0.54s/step
+[2026-09-21 17:32:57] step 480/500  total=1.1987 action=0.0184 vision=0.0060 task=1.9459 phase=0.0015 effect=3.1399 (contrast=2.154 var=0.964)  0.53s/step
+[2026-09-21 17:32:59] step 490/500  total=1.1027 action=0.0101 vision=0.0049 task=1.9459 phase=0.0010 effect=2.7935 (contrast=1.810 var=0.961)  0.52s/step
+[2026-09-21 17:33:00] step 500/500  total=1.0833 action=0.0194 vision=0.0085 task=1.9459 phase=0.0026 effect=2.6638 (contrast=1.688 var=0.952)  0.52s/step
+[2026-09-21 17:33:44]   saved cte_step_000500.pt  val_total=1.1945
+[2026-09-21 17:33:44] done. final checkpoint: /workspace/mnt/sqzhang26/zeva-work/runs/zeva_cte/cte-v1-20260921/cte_step_000500.pt
+Traceback (most recent call last):
+Traceback (most recent call last):
+Traceback (most recent call last):
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/multiprocessing/util.py", line 371, in _run_finalizers
+    finalizer()
+    ~~~~~~~~~^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/multiprocessing/util.py", line 295, in __call__
+    res = self._callback(*self._args, **self._kwargs)
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/multiprocessing/util.py", line 147, in _remove_temp_dir
+    rmtree(tempdir)
+    ~~~~~~^^^^^^^^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/shutil.py", line 763, in rmtree
+    _rmtree_safe_fd(stack, onexc)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/shutil.py", line 707, in _rmtree_safe_fd
+    onexc(func, path, err)
+    ~~~~~^^^^^^^^^^^^^^^^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/shutil.py", line 700, in _rmtree_safe_fd
+    onexc(os.unlink, fullname, err)
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/shutil.py", line 696, in _rmtree_safe_fd
+    os.unlink(entry.name, dir_fd=topfd)
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+OSError: [Errno 16] Device or resource busy: '/workspace/mnt/sqzhang26/zeva-work/tmp/pymp-08n8qg_e'
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/multiprocessing/util.py", line 371, in _run_finalizers
+    finalizer()
+    ~~~~~~~~~^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/multiprocessing/util.py", line 295, in __call__
+    res = self._callback(*self._args, **self._kwargs)
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/multiprocessing/util.py", line 147, in _remove_temp_dir
+    rmtree(tempdir)
+    ~~~~~~^^^^^^^^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/shutil.py", line 763, in rmtree
+    _rmtree_safe_fd(stack, onexc)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/shutil.py", line 707, in _rmtree_safe_fd
+    onexc(func, path, err)
+    ~~~~~^^^^^^^^^^^^^^^^^
+Traceback (most recent call last):
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/shutil.py", line 700, in _rmtree_safe_fd
+    onexc(os.unlink, fullname, err)
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/shutil.py", line 696, in _rmtree_safe_fd
+    os.unlink(entry.name, dir_fd=topfd)
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+OSError: [Errno 16] Device or resource busy: '/workspace/mnt/sqzhang26/zeva-work/tmp/pymp-dot54fo5'
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/multiprocessing/util.py", line 371, in _run_finalizers
+    finalizer()
+    ~~~~~~~~~^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/multiprocessing/util.py", line 295, in __call__
+    res = self._callback(*self._args, **self._kwargs)
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/multiprocessing/util.py", line 147, in _remove_temp_dir
+    rmtree(tempdir)
+    ~~~~~~^^^^^^^^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/shutil.py", line 763, in rmtree
+    _rmtree_safe_fd(stack, onexc)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/shutil.py", line 707, in _rmtree_safe_fd
+    onexc(func, path, err)
+    ~~~~~^^^^^^^^^^^^^^^^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/shutil.py", line 700, in _rmtree_safe_fd
+    onexc(os.unlink, fullname, err)
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/shutil.py", line 696, in _rmtree_safe_fd
+    os.unlink(entry.name, dir_fd=topfd)
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+OSError: [Errno 16] Device or resource busy: '/workspace/mnt/sqzhang26/zeva-work/tmp/pymp-3wtls9qu'
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/multiprocessing/util.py", line 371, in _run_finalizers
+    finalizer()
+    ~~~~~~~~~^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/multiprocessing/util.py", line 295, in __call__
+    res = self._callback(*self._args, **self._kwargs)
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/multiprocessing/util.py", line 147, in _remove_temp_dir
+    rmtree(tempdir)
+    ~~~~~~^^^^^^^^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/shutil.py", line 763, in rmtree
+    _rmtree_safe_fd(stack, onexc)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/shutil.py", line 707, in _rmtree_safe_fd
+    onexc(func, path, err)
+    ~~~~~^^^^^^^^^^^^^^^^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/shutil.py", line 700, in _rmtree_safe_fd
+    onexc(os.unlink, fullname, err)
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/shutil.py", line 696, in _rmtree_safe_fd
+    os.unlink(entry.name, dir_fd=topfd)
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+OSError: [Errno 16] Device or resource busy: '/workspace/mnt/sqzhang26/zeva-work/tmp/pymp-9cjxdezg'

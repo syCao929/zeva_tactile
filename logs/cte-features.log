@@ -1,0 +1,16 @@
+CTE: 9.49M params, window_latents=17
+encoding 101 episodes -> /workspace/mnt/sqzhang26/zeva-work/datasets/xhand_cte_features
+  [10/101] ep9 97 boundaries (0.80 ep/s, ETA 1.9 min)
+  [20/101] ep19 111 boundaries (0.72 ep/s, ETA 1.9 min)
+  [30/101] ep29 114 boundaries (0.72 ep/s, ETA 1.6 min)
+  [40/101] ep39 129 boundaries (0.71 ep/s, ETA 1.4 min)
+  [50/101] ep49 119 boundaries (0.71 ep/s, ETA 1.2 min)
+  [60/101] ep59 136 boundaries (0.72 ep/s, ETA 0.9 min)
+  [70/101] ep69 94 boundaries (0.72 ep/s, ETA 0.7 min)
+  [80/101] ep79 112 boundaries (0.72 ep/s, ETA 0.5 min)
+  [90/101] ep89 95 boundaries (0.73 ep/s, ETA 0.3 min)
+  [100/101] ep99 104 boundaries (0.73 ep/s, ETA 0.0 min)
+  [101/101] ep100 100 boundaries (0.73 ep/s, ETA 0.0 min)
+
+encoded 101 episodes (0 skipped), 11,883 boundary frames, in 2.3 min
+features: /workspace/mnt/sqzhang26/zeva-work/datasets/xhand_cte_features  (5.7 MB)

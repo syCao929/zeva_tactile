@@ -1,0 +1,7 @@
+dataset: 101 episodes under /workspace/mnt/sqzhang26/zeva-work/datasets/press_button_4_times_merged_filtered
+[09-21 17:08:52|INFO|cosmos_framework/model/generator/tokenizers/wan2pt2_vae_4x16x16.py:1032:_video_vae] loading /workspace/mnt/sqzhang26/zeva-work/models/Wan2.2-TI2V-5B/Wan2.2_VAE.pth
+  [10/101] ep94 456 raw -> 30 latent  (0.06 ep/s, ETA 1.7 min)
+
+encoded 16 episodes (85 skipped), 480 latent frames, in 4.7 min
+cache:   /workspace/mnt/sqzhang26/zeva-work/datasets/xhand_cte_cache  (0.64 GB)
+manifest: /workspace/mnt/sqzhang26/zeva-work/datasets/xhand_cte_cache/manifest.json

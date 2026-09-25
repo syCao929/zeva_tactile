@@ -1,0 +1,14 @@
+launching server ...
+server ready
+  request 0: actions (31, 18) range [-2.913, +2.993]
+  request 1: actions (31, 18) range [-2.917, +2.990]
+  request 2: actions (31, 18) range [-2.919, +2.998]
+  request 3: actions (31, 18) range [-2.926, +2.986]
+  request 4: actions (31, 18) range [-2.911, +2.985]
+  request 5: actions (31, 18) range [-2.906, +2.985]
+
+boundary_frames per request: [1, 2, 3, 4, 5, 6]
+action shapes:               [(31, 18), (31, 18), (31, 18), (31, 18), (31, 18), (31, 18)]
+
+✅ 服务端加载 stage2 检查点、协议返回 (31, 18)、CTE 路径活跃（boundary_frames 到 6）
+server log: /workspace/mnt/sqzhang26/zeva-work/logs/verify-v3-server.log

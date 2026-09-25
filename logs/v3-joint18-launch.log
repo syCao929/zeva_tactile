@@ -1,0 +1,14 @@
+== 检查环境 ==
+  ✅ BASE_CHECKPOINT_PATH    
+  ✅ QWEN_VLM_PATH           
+  ✅ WAN_VAE_PATH            
+  ✅ XHAND_DATA_ROOT         
+  ✅ XHAND_ACTION_STATS_PATH 
+== run: v3-joint18-20260925 ==
+   检查点目录: /workspace/mnt/sqzhang26/zeva-work/runs/zeva/action_xhand/v3-joint18-20260925
+   日志文件:   /workspace/mnt/sqzhang26/zeva-work/logs/v3-joint18-20260925.log
+   新 run，从 BASE_CHECKPOINT_PATH 基座开始
+   （续训请用同一个名字: tools/run-xhand-train.sh start v3-joint18-20260925）
+== 启动 (max_iter=5000 save_iter=500 nproc=7) ==
+   已启动 PID 131908
+   日志: /workspace/mnt/sqzhang26/zeva-work/logs/v3-joint18-20260925.log   (tail: tools/run-xhand-train.sh tail | 停止: tools/run-xhand-train.sh stop)

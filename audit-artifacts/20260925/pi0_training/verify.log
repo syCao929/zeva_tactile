@@ -1,0 +1,179 @@
+{
+  "checkpoint": "/workspace/mnt/sqzhang26/zeva-work/runs/pi0/smoke-baseline-20260925/checkpoints/step_00000003",
+  "initial": "/workspace/mnt/sqzhang26/zeva-work/models/pi0_base_pytorch/model.safetensors",
+  "initial_to_trained": {
+    "groups": {
+      "action_in_proj": {
+        "tensors": 2,
+        "changed_tensors": 2,
+        "elements": 33792,
+        "changed_elements": 33791,
+        "max_abs_delta": 5.27501106262207e-05
+      },
+      "action_out_proj": {
+        "tensors": 2,
+        "changed_tensors": 2,
+        "elements": 32800,
+        "changed_elements": 32800,
+        "max_abs_delta": 5.257502198219299e-05
+      },
+      "action_time_mlp_in": {
+        "tensors": 2,
+        "changed_tensors": 2,
+        "elements": 2098176,
+        "changed_elements": 2098175,
+        "max_abs_delta": 5.2578747272491455e-05
+      },
+      "action_time_mlp_out": {
+        "tensors": 2,
+        "changed_tensors": 2,
+        "elements": 1049600,
+        "changed_elements": 1049600,
+        "max_abs_delta": 5.258619785308838e-05
+      },
+      "action_expert": {
+        "tensors": 164,
+        "changed_tensors": 163,
+        "elements": 574788608,
+        "changed_elements": 65923975,
+        "max_abs_delta": 7.62939453125e-05
+      },
+      "vision_language_backbone": {
+        "tensors": 166,
+        "changed_tensors": 159,
+        "elements": 2510893056,
+        "changed_elements": 457782185,
+        "max_abs_delta": 7.62939453125e-05
+      },
+      "vision_encoder": {
+        "tensors": 437,
+        "changed_tensors": 401,
+        "elements": 412442352,
+        "changed_elements": 96090909,
+        "max_abs_delta": 9.1552734375e-05
+      },
+      "state_proj": {
+        "tensors": 2,
+        "changed_tensors": 2,
+        "elements": 33792,
+        "changed_elements": 33792,
+        "max_abs_delta": 5.263090133666992e-05
+      }
+    },
+    "keys_equal": true,
+    "all_finite": true,
+    "dtype_changes": [],
+    "missing": [],
+    "unexpected": [],
+    "changed_elements": 623045227,
+    "exact_equal": false,
+    "required_groups_updated": true,
+    "ok": true
+  },
+  "training_state": {
+    "step": 3,
+    "world_size": 1,
+    "optimizer_parameter_states": 770,
+    "optimizer_min_step": 3.0,
+    "optimizer_max_step": 3.0,
+    "optimizer_nonzero_moment_tensors": 1538,
+    "optimizer_all_finite": true,
+    "loader": {
+      "epoch": 0,
+      "offset": 3
+    },
+    "loader_ok": true,
+    "rng_by_rank_present": true,
+    "ok": true
+  },
+  "metrics": {
+    "start_step": 1,
+    "train_steps": [
+      2,
+      3
+    ],
+    "finite_positive_gradient": true,
+    "peak_memory_allocated_gib": 29.982090950012207,
+    "ok": true,
+    "reference_differences": [],
+    "exact_equal": true
+  },
+  "reference": "/workspace/mnt/sqzhang26/zeva-work/audit-artifacts/20260925/pi0_training/uninterrupted/step_00000003",
+  "resume_weights": {
+    "groups": {
+      "action_in_proj": {
+        "tensors": 2,
+        "changed_tensors": 0,
+        "elements": 33792,
+        "changed_elements": 0,
+        "max_abs_delta": 0.0
+      },
+      "action_out_proj": {
+        "tensors": 2,
+        "changed_tensors": 0,
+        "elements": 32800,
+        "changed_elements": 0,
+        "max_abs_delta": 0.0
+      },
+      "action_time_mlp_in": {
+        "tensors": 2,
+        "changed_tensors": 0,
+        "elements": 2098176,
+        "changed_elements": 0,
+        "max_abs_delta": 0.0
+      },
+      "action_time_mlp_out": {
+        "tensors": 2,
+        "changed_tensors": 0,
+        "elements": 1049600,
+        "changed_elements": 0,
+        "max_abs_delta": 0.0
+      },
+      "action_expert": {
+        "tensors": 164,
+        "changed_tensors": 0,
+        "elements": 574788608,
+        "changed_elements": 0,
+        "max_abs_delta": 0.0
+      },
+      "vision_language_backbone": {
+        "tensors": 166,
+        "changed_tensors": 0,
+        "elements": 2510893056,
+        "changed_elements": 0,
+        "max_abs_delta": 0.0
+      },
+      "vision_encoder": {
+        "tensors": 437,
+        "changed_tensors": 0,
+        "elements": 412442352,
+        "changed_elements": 0,
+        "max_abs_delta": 0.0
+      },
+      "state_proj": {
+        "tensors": 2,
+        "changed_tensors": 0,
+        "elements": 33792,
+        "changed_elements": 0,
+        "max_abs_delta": 0.0
+      }
+    },
+    "keys_equal": true,
+    "all_finite": true,
+    "dtype_changes": [],
+    "missing": [],
+    "unexpected": [],
+    "changed_elements": 0,
+    "exact_equal": true,
+    "required_groups_updated": false,
+    "ok": true
+  },
+  "resume_training_state": {
+    "mismatches": [],
+    "tensors_compared": 2312,
+    "tensor_elements": 6266379506,
+    "exact_equal": true,
+    "ok": true
+  },
+  "ok": true
+}

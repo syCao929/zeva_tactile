@@ -110,7 +110,7 @@ htmlcov/
 .vscode/
 .cursorignore
 .cursorindexingignore
-*.log
+# *.log
 
 # ===========================================================================
 # 权重与媒体大文件

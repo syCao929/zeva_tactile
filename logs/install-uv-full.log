@@ -1,0 +1,20 @@
+Using Python 3.13.15 environment at: envs/zeva
+Resolved 424 packages in 3m 22s
+   Updating https://github.com/mli0603/lerobot.git (1a4316c6845330bc552fb982dbc44bdb4f66f2f1)
+   Building megatron-core @ git+https://github.com/NVIDIA/Megatron-LM.git@de56227b26ba56de885897361272513697de7dc6
+Downloading pillow (6.8MiB)
+Downloading opencv-contrib-python (75.5MiB)
+Downloading nvidia-dali-cuda120 (398.9MiB)
+Downloading opencv-python (69.5MiB)
+Downloading ray (65.3MiB)
+Downloading polars-runtime-32 (43.6MiB)
+Downloading pyarrow (40.8MiB)
+Downloading llvmlite (40.4MiB)
+error: Failed to download and build `lerobot @ git+https://github.com/mli0603/lerobot.git@1a4316c6845330bc552fb982dbc44bdb4f66f2f1`
+  cause: Git operation failed
+  cause: failed to fetch into: cache/uv/git-v0/db/3854d3ea6f0ea07f
+  cause: failed to fetch commit `1a4316c6845330bc552fb982dbc44bdb4f66f2f1`
+  cause: process didn't exit successfully: `/usr/bin/git fetch --force --update-head-ok 'https://github.com/mli0603/lerobot.git' '+1a4316c6845330bc552fb982dbc44bdb4f66f2f1:refs/commit/1a4316c6845330bc552fb982dbc44bdb4f66f2f1'` (exit status: 128)
+         --- stderr
+         error: RPC failed; curl 56 Received HTTP code 503 from proxy after CONNECT
+         fatal: expected flush after ref listing

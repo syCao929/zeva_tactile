@@ -1,0 +1,156 @@
+
+################ 会话开始 2026-09-21 17:20:10  [CTE] ################
+# run=smoke-test  steps=1  save_every=1  batch=8  lr=1e-4
+# cache=/workspace/mnt/sqzhang26/zeva-work/datasets/xhand_cte_cache  window_latents=17
+[env.sh] 警告: 未找到 libEGL，MUJOCO_GL 未启用。
+         需 apt-get install -y libegl1 libgl1（或装带 EGL 的 NVIDIA 驱动）
+         后才能做 RoboCasa 无头渲染。静默此提示: export ZEVA_SKIP_EGL_WARNING=1
+[2026-09-21 17:20:33] --resume given but /workspace/mnt/sqzhang26/zeva-work/runs/zeva_cte/smoke-test/cte_latest.pt does not exist; starting fresh
+[2026-09-21 17:20:33] cache=/workspace/mnt/sqzhang26/zeva-work/datasets/xhand_cte_cache window_latents=17 train_windows=9772 val_windows=521 params=9.49M device=cuda start_step=0
+/workspace/mnt/sqzhang26/zeva-work/cosmos-framework/cosmos_framework/zeva_training/train_cte.py:218: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  f"step {step}/{args.steps}  total={float(losses['total']):.4f} "
+[2026-09-21 17:20:36] step 1/1  total=2.9250 action=0.9201 vision=0.3581 task=1.9464 phase=0.0036 effect=5.0284 (contrast=3.939 var=0.980)  3.05s/step
+Traceback (most recent call last):
+  File "<frozen runpy>", line 203, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/workspace/mnt/sqzhang26/zeva-work/cosmos-framework/cosmos_framework/zeva_training/train_cte.py", line 244, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "/workspace/mnt/sqzhang26/zeva-work/cosmos-framework/cosmos_framework/zeva_training/train_cte.py", line 234, in main
+    val = evaluate()
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+  File "/workspace/mnt/sqzhang26/zeva-work/cosmos-framework/cosmos_framework/zeva_training/train_cte.py", line 183, in evaluate
+    for batch in val_loader:
+                 ^^^^^^^^^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/site-packages/torch/utils/data/dataloader.py", line 741, in __next__
+    data = self._next_data()
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/site-packages/torch/utils/data/dataloader.py", line 801, in _next_data
+    data = self._dataset_fetcher.fetch(index)  # may raise StopIteration
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/site-packages/torch/utils/data/_utils/fetch.py", line 54, in fetch
+    data = [self.dataset[idx] for idx in possibly_batched_index]
+            ~~~~~~~~~~~~^^^^^
+  File "/workspace/mnt/sqzhang26/zeva-work/cosmos-framework/cosmos_framework/zeva_training/cte_dataset.py", line 160, in __getitem__
+    raise RuntimeError(f"{filename}: window [{start},{start+t}) exceeds {frames.shape[1]} latents")
+RuntimeError: episode_000018.npz: window [111,128) exceeds 16 latents
+
+################ 会话开始 2026-09-21 17:29:10  [CTE] ################
+# run=smoke-test  steps=3  save_every=2  batch=8  lr=1e-4
+# cache=/workspace/mnt/sqzhang26/zeva-work/datasets/xhand_cte_cache  window_latents=17
+[env.sh] 警告: 未找到 libEGL，MUJOCO_GL 未启用。
+         需 apt-get install -y libegl1 libgl1（或装带 EGL 的 NVIDIA 驱动）
+         后才能做 RoboCasa 无头渲染。静默此提示: export ZEVA_SKIP_EGL_WARNING=1
+[2026-09-21 17:29:33] --resume given but /workspace/mnt/sqzhang26/zeva-work/runs/zeva_cte/smoke-test/cte_latest.pt does not exist; starting fresh
+[2026-09-21 17:29:33] cache=/workspace/mnt/sqzhang26/zeva-work/datasets/xhand_cte_cache window_latents=17 train_windows=9748 val_windows=519 params=9.49M device=cuda start_step=0
+/workspace/mnt/sqzhang26/zeva-work/cosmos-framework/cosmos_framework/zeva_training/train_cte.py:218: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  f"step {step}/{args.steps}  total={float(losses['total']):.4f} "
+[2026-09-21 17:29:36] step 1/3  total=2.8892 action=0.9105 vision=0.3574 task=1.9463 phase=0.0035 effect=4.9270 (contrast=3.843 var=0.975)  3.06s/step
+[2026-09-21 17:30:31]   saved cte_step_000002.pt  val_total=2.2741
+[2026-09-21 17:31:25]   saved cte_step_000003.pt  val_total=2.1482
+[2026-09-21 17:31:25] done. final checkpoint: /workspace/mnt/sqzhang26/zeva-work/runs/zeva_cte/smoke-test/cte_step_000003.pt
+Traceback (most recent call last):
+Traceback (most recent call last):
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/multiprocessing/util.py", line 371, in _run_finalizers
+    finalizer()
+    ~~~~~~~~~^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/multiprocessing/util.py", line 295, in __call__
+    res = self._callback(*self._args, **self._kwargs)
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/multiprocessing/util.py", line 147, in _remove_temp_dir
+    rmtree(tempdir)
+    ~~~~~~^^^^^^^^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/shutil.py", line 763, in rmtree
+    _rmtree_safe_fd(stack, onexc)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/shutil.py", line 707, in _rmtree_safe_fd
+    onexc(func, path, err)
+    ~~~~~^^^^^^^^^^^^^^^^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/shutil.py", line 700, in _rmtree_safe_fd
+    onexc(os.unlink, fullname, err)
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/shutil.py", line 696, in _rmtree_safe_fd
+    os.unlink(entry.name, dir_fd=topfd)
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+OSError: [Errno 16] Device or resource busy: '/workspace/mnt/sqzhang26/zeva-work/tmp/pymp-p9t8oraf'
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/multiprocessing/util.py", line 371, in _run_finalizers
+    finalizer()
+    ~~~~~~~~~^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/multiprocessing/util.py", line 295, in __call__
+    res = self._callback(*self._args, **self._kwargs)
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/multiprocessing/util.py", line 147, in _remove_temp_dir
+    rmtree(tempdir)
+    ~~~~~~^^^^^^^^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/shutil.py", line 763, in rmtree
+    _rmtree_safe_fd(stack, onexc)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/shutil.py", line 707, in _rmtree_safe_fd
+    onexc(func, path, err)
+    ~~~~~^^^^^^^^^^^^^^^^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/shutil.py", line 700, in _rmtree_safe_fd
+    onexc(os.unlink, fullname, err)
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/shutil.py", line 696, in _rmtree_safe_fd
+    os.unlink(entry.name, dir_fd=topfd)
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+OSError: [Errno 16] Device or resource busy: '/workspace/mnt/sqzhang26/zeva-work/tmp/pymp-nimntg8e'
+Traceback (most recent call last):
+Traceback (most recent call last):
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/multiprocessing/util.py", line 371, in _run_finalizers
+    finalizer()
+    ~~~~~~~~~^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/multiprocessing/util.py", line 295, in __call__
+    res = self._callback(*self._args, **self._kwargs)
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/multiprocessing/util.py", line 147, in _remove_temp_dir
+    rmtree(tempdir)
+    ~~~~~~^^^^^^^^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/shutil.py", line 763, in rmtree
+    _rmtree_safe_fd(stack, onexc)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/shutil.py", line 707, in _rmtree_safe_fd
+    onexc(func, path, err)
+    ~~~~~^^^^^^^^^^^^^^^^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/shutil.py", line 700, in _rmtree_safe_fd
+    onexc(os.unlink, fullname, err)
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/shutil.py", line 696, in _rmtree_safe_fd
+    os.unlink(entry.name, dir_fd=topfd)
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+OSError: [Errno 16] Device or resource busy: '/workspace/mnt/sqzhang26/zeva-work/tmp/pymp-pxvw8ca2'
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/multiprocessing/util.py", line 371, in _run_finalizers
+    finalizer()
+    ~~~~~~~~~^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/multiprocessing/util.py", line 295, in __call__
+    res = self._callback(*self._args, **self._kwargs)
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/multiprocessing/util.py", line 147, in _remove_temp_dir
+    rmtree(tempdir)
+    ~~~~~~^^^^^^^^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/shutil.py", line 763, in rmtree
+    _rmtree_safe_fd(stack, onexc)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/shutil.py", line 707, in _rmtree_safe_fd
+    onexc(func, path, err)
+    ~~~~~^^^^^^^^^^^^^^^^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/shutil.py", line 700, in _rmtree_safe_fd
+    onexc(os.unlink, fullname, err)
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/mnt/sqzhang26/zeva-work/envs/zeva/lib/python3.13/shutil.py", line 696, in _rmtree_safe_fd
+    os.unlink(entry.name, dir_fd=topfd)
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+OSError: [Errno 16] Device or resource busy: '/workspace/mnt/sqzhang26/zeva-work/tmp/pymp-rtexqc_h'
+
+################ 会话开始 2026-09-21 17:31:59  [CTE] ################
+# run=smoke-test  steps=2  save_every=1  batch=8  lr=1e-4
+# cache=/workspace/mnt/sqzhang26/zeva-work/datasets/xhand_cte_cache  window_latents=17
+[env.sh] 警告: 未找到 libEGL，MUJOCO_GL 未启用。
+         需 apt-get install -y libegl1 libgl1（或装带 EGL 的 NVIDIA 驱动）
+         后才能做 RoboCasa 无头渲染。静默此提示: export ZEVA_SKIP_EGL_WARNING=1
+[2026-09-21 17:32:22] --resume given but /workspace/mnt/sqzhang26/zeva-work/runs/zeva_cte/smoke-test/cte_latest.pt does not exist; starting fresh
+[2026-09-21 17:32:22] cache=/workspace/mnt/sqzhang26/zeva-work/datasets/xhand_cte_cache window_latents=17 train_windows=9748 val_windows=519 params=9.49M device=cuda start_step=0
+/workspace/mnt/sqzhang26/zeva-work/cosmos-framework/cosmos_framework/zeva_training/train_cte.py:218: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  f"step {step}/{args.steps}  total={float(losses['total']):.4f} "
+[2026-09-21 17:32:25] step 1/2  total=2.8892 action=0.9105 vision=0.3574 task=1.9463 phase=0.0035 effect=4.9270 (contrast=3.843 var=0.975)  3.04s/step
+[2026-09-21 17:33:18]   saved cte_step_000001.pt  val_total=2.4906
+[2026-09-21 17:34:12]   saved cte_step_000002.pt  val_total=2.2741
+[2026-09-21 17:34:12] done. final checkpoint: /workspace/mnt/sqzhang26/zeva-work/runs/zeva_cte/smoke-test/cte_step_000002.pt

@@ -1,0 +1,19 @@
+Using Python 3.13.15 environment at: envs/zeva
+Resolved 422 packages in 58.05s
+Downloading polars-runtime-32 (43.6MiB)
+Downloading nvidia-dali-cuda120 (398.9MiB)
+Downloading pyarrow (40.8MiB)
+Downloading pillow (6.8MiB)
+Downloading opencv-contrib-python (75.5MiB)
+Downloading ray (65.3MiB)
+Downloading opencv-python (69.5MiB)
+Downloading llvmlite (40.4MiB)
+ Downloaded pillow
+Downloading av (39.0MiB)
+ Downloaded av
+Downloading pyrefly (36.7MiB)
+ Downloaded pyrefly
+Downloading scipy (33.6MiB)
+ Downloaded scipy
+Downloading nvidia-nvimgcodec-cu12 (32.2MiB)
+ Downloaded nvidia-nvimgcodec-cu12
