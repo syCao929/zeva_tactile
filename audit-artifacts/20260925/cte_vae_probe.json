@@ -1,0 +1,20 @@
+{
+  "device": "cpu",
+  "vae_dtype": "torch.bfloat16",
+  "episode": 0,
+  "raw_frame": 16,
+  "shape": [
+    48,
+    30,
+    52
+  ],
+  "preprocessing_matches_server_formula": true,
+  "input_range": [
+    -0.9924905300140381,
+    1.0
+  ],
+  "cached_vs_reencoded_cosine": 0.9999728202819824,
+  "relative_l2_error": 0.00835293997079134,
+  "cached_std": 0.43190327286720276,
+  "reencoded_std": 0.4322904646396637
+}

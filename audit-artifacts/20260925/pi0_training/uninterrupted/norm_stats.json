@@ -1,0 +1,533 @@
+{
+  "version": 1,
+  "normalization": "zscore",
+  "count": 45809,
+  "provenance": {
+    "root": "/workspace/mnt/sqzhang26/zeva-work/datasets/press_button_4_times_merged_filtered",
+    "dataset_fingerprint": "dad922cab1c89140edcbd626781dffc21fa41d7affd4fbdc0670be8d73cd166e",
+    "split_seed": 42,
+    "split_val_ratio": 0.03,
+    "horizon": 32,
+    "fps": 15,
+    "state_indices": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      28,
+      30,
+      32,
+      34,
+      36,
+      38,
+      40,
+      42,
+      44,
+      46,
+      48,
+      50
+    ],
+    "action_indices": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17
+    ],
+    "action_representation": "absolute_joint_position",
+    "frame_weighting": "unique_frames_of_training_episodes",
+    "training_episodes": [
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 0
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 1
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 2
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 3
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 4
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 5
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 6
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 7
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 8
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 9
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 10
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 11
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 12
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 13
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 14
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 15
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 16
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 17
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 18
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 19
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 20
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 21
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 22
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 23
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 24
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 25
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 26
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 27
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 28
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 29
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 30
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 31
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 32
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 33
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 34
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 35
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 36
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 37
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 39
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 40
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 41
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 42
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 43
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 44
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 45
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 46
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 47
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 48
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 49
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 50
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 51
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 52
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 53
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 54
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 55
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 56
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 57
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 58
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 59
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 60
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 61
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 62
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 63
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 64
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 65
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 66
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 67
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 69
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 70
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 71
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 72
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 73
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 74
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 75
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 76
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 77
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 78
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 79
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 80
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 81
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 82
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 83
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 84
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 85
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 86
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 87
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 88
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 89
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 90
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 91
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 92
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 93
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 94
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 95
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 96
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 97
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 98
+      },
+      {
+        "root": "xhand/PressButton4Times/lerobot_v21/lerobot",
+        "episode_id": 100
+      }
+    ]
+  },
+  "state": {
+    "mean": [
+      0.16046504819570656,
+      -1.647917273621831,
+      2.122179475659516,
+      -1.916332687627731,
+      -1.4864002841090787,
+      -0.7953343131109232,
+      0.3621650820343428,
+      0.29978973903634515,
+      1.2764217719936561,
+      0.04594968931290732,
+      0.1926111300735054,
+      0.5051826967399337,
+      1.5955304994752801,
+      1.5077016035013697,
+      1.7747197656899005,
+      1.7616097196613278,
+      1.6325785219316402,
+      1.8700247893657662
+    ],
+    "std": [
+      0.16831185818919397,
+      0.17424265361018174,
+      0.23754980222221905,
+      0.16405358793530625,
+      0.12565229084775636,
+      0.18180985156432058,
+      0.3685241089130305,
+      0.20118403715372285,
+      0.23709633231309477,
+      0.07047348116019786,
+      0.34602831568394077,
+      0.6179348243129764,
+      0.4254521962021747,
+      0.38834846075908064,
+      0.34686641718668754,
+      0.24877502820671904,
+      0.3655777259854488,
+      0.22004651759130286
+    ]
+  },
+  "action": {
+    "mean": [
+      0.15973524352293053,
+      -1.6493294374000071,
+      2.125884038661026,
+      -1.9187502591891887,
+      -1.486640932484032,
+      -0.7952154354124632,
+      0.33724610684596157,
+      0.3004280771277454,
+      1.289283737562039,
+      0.05493007834853605,
+      0.2017106792906251,
+      0.5204055867831409,
+      1.6051816921735265,
+      1.5057794502592006,
+      1.7894209041308993,
+      1.768538506682031,
+      1.6478712455454776,
+      1.8816718453931216
+    ],
+    "std": [
+      0.16955281814785053,
+      0.17456087255487734,
+      0.2335968992886989,
+      0.1619994824071158,
+      0.1263966915337387,
+      0.18205430138030584,
+      0.4004290956711776,
+      0.20866369438042548,
+      0.25152359668662316,
+      0.07957354583043286,
+      0.36819275839743865,
+      0.6139046795544401,
+      0.42726576158794566,
+      0.38190687082401054,
+      0.3360200886494333,
+      0.23358207584593105,
+      0.36108164322042646,
+      0.2029110327617675
+    ]
+  }
+}

@@ -1,0 +1,126 @@
+{
+  "torch_version": "2.10.0+cu128",
+  "device": "cpu",
+  "source_sha256": {
+    "cosmos-framework/cosmos_framework/model/generator/mot/cosmos3_vfm_network.py": "10589288292ac31d5f4f8a562c86507a5d0bd709ea0b23437a59fc91b689d9c6",
+    "cosmos-framework/cosmos_framework/model/generator/omni_mot_model.py": "a39d0ac901f0033abcd17c01c588eb4f269e0dbd6d6279764240af0785b22104",
+    "cosmos-framework/cosmos_framework/model/zeva/policy_injection.py": "6006e3476c84cbcdabb3a92f8a0471f376ea7c36fb75674109ab47e5a946510a"
+  },
+  "initialization": {
+    "tactile_head_parameters_uninitialized": [],
+    "tactile_head_output_finite": [
+      true,
+      true,
+      true
+    ],
+    "tactile_bit_all_parameters_finite": true,
+    "baseline_prior_all_parameters_finite": true,
+    "baseline_layernorms_exact_one_zero": {
+      "phase_query.0": true,
+      "effect_project.0": true,
+      "effect_norm": true,
+      "effect_gate.0": true,
+      "context_norm": true
+    },
+    "baseline_attention_all_parameters_finite": {
+      "effect_attention": true,
+      "progress_attention": true
+    },
+    "baseline_adapter_all_parameters_finite": true,
+    "baseline_global_projector_all_parameters_finite": true
+  },
+  "gradients": [
+    {
+      "parquet": "datasets/press_button_4_times_merged_filtered/xhand/PressButton4Times/lerobot_v21/lerobot/data/chunk-000/episode_000000.parquet",
+      "frame": 0,
+      "tactile_shape": [
+        1,
+        30,
+        1972
+      ],
+      "tactile_valid_frames": 1,
+      "last_effect_slot_valid": false,
+      "gate_value": 0.0,
+      "baseline_exact": true,
+      "gate_grad": [
+        -0.0044625988230109215
+      ],
+      "projector_grad_l1": 0.0,
+      "bit_grad_l1": 0.0,
+      "effect_head_grad_l1": 0.0,
+      "phase_head_grad_tensors": 0,
+      "confidence_head_grad_tensors": 0,
+      "encoder_grad_tensors": 0,
+      "phase_gate_has_grad": false
+    },
+    {
+      "parquet": "datasets/press_button_4_times_merged_filtered/xhand/PressButton4Times/lerobot_v21/lerobot/data/chunk-000/episode_000000.parquet",
+      "frame": 0,
+      "tactile_shape": [
+        1,
+        30,
+        1972
+      ],
+      "tactile_valid_frames": 1,
+      "last_effect_slot_valid": false,
+      "gate_value": 0.3,
+      "baseline_exact": false,
+      "gate_grad": [
+        -0.0012031656224280596
+      ],
+      "projector_grad_l1": 14.302564201876521,
+      "bit_grad_l1": 5.392857676371932,
+      "effect_head_grad_l1": 1.1033906731754541,
+      "phase_head_grad_tensors": 0,
+      "confidence_head_grad_tensors": 0,
+      "encoder_grad_tensors": 0,
+      "phase_gate_has_grad": false
+    },
+    {
+      "parquet": "datasets/press_button_4_times_merged_filtered/xhand/PressButton4Times/lerobot_v21/lerobot/data/chunk-000/episode_000000.parquet",
+      "frame": 40,
+      "tactile_shape": [
+        1,
+        30,
+        1972
+      ],
+      "tactile_valid_frames": 30,
+      "last_effect_slot_valid": true,
+      "gate_value": 0.0,
+      "baseline_exact": true,
+      "gate_grad": [
+        -0.0021373992785811424
+      ],
+      "projector_grad_l1": 0.0,
+      "bit_grad_l1": 0.0,
+      "effect_head_grad_l1": 0.0,
+      "phase_head_grad_tensors": 0,
+      "confidence_head_grad_tensors": 0,
+      "encoder_grad_tensors": 0,
+      "phase_gate_has_grad": false
+    },
+    {
+      "parquet": "datasets/press_button_4_times_merged_filtered/xhand/PressButton4Times/lerobot_v21/lerobot/data/chunk-000/episode_000000.parquet",
+      "frame": 40,
+      "tactile_shape": [
+        1,
+        30,
+        1972
+      ],
+      "tactile_valid_frames": 30,
+      "last_effect_slot_valid": true,
+      "gate_value": 0.3,
+      "baseline_exact": false,
+      "gate_grad": [
+        -0.0021679059136658907
+      ],
+      "projector_grad_l1": 7.588153902441263,
+      "bit_grad_l1": 2.9308189190924168,
+      "effect_head_grad_l1": 0.531556709902361,
+      "phase_head_grad_tensors": 0,
+      "confidence_head_grad_tensors": 0,
+      "encoder_grad_tensors": 0,
+      "phase_gate_has_grad": false
+    }
+  ]
+}

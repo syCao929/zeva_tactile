@@ -1,0 +1,396 @@
+{
+  "source": "/workspace/mnt/sqzhang26/FactileLDM/env/.venv",
+  "target": "/workspace/mnt/sqzhang26/zeva-work/envs/pi0",
+  "copied": [
+    {
+      "name": "absl-py",
+      "version": "2.5.0",
+      "files": 31,
+      "bytes": 483040
+    },
+    {
+      "name": "beartype",
+      "version": "0.19.0",
+      "files": 335,
+      "bytes": 3603424
+    },
+    {
+      "name": "certifi",
+      "version": "2026.7.22",
+      "files": 13,
+      "bytes": 249281
+    },
+    {
+      "name": "charset-normalizer",
+      "version": "3.5.1",
+      "files": 23,
+      "bytes": 747691
+    },
+    {
+      "name": "einops",
+      "version": "0.8.2",
+      "files": 33,
+      "bytes": 234152
+    },
+    {
+      "name": "etils",
+      "version": "1.14.0",
+      "files": 103,
+      "bytes": 422586
+    },
+    {
+      "name": "flax",
+      "version": "0.10.2",
+      "files": 129,
+      "bytes": 1521615
+    },
+    {
+      "name": "fsspec",
+      "version": "2026.9.0",
+      "files": 63,
+      "bytes": 813913
+    },
+    {
+      "name": "hf-xet",
+      "version": "1.6.0",
+      "files": 8,
+      "bytes": 12509043
+    },
+    {
+      "name": "huggingface-hub",
+      "version": "0.36.2",
+      "files": 174,
+      "bytes": 2268595
+    },
+    {
+      "name": "humanize",
+      "version": "4.16.0",
+      "files": 83,
+      "bytes": 432206
+    },
+    {
+      "name": "idna",
+      "version": "3.20",
+      "files": 18,
+      "bytes": 342942
+    },
+    {
+      "name": "jax",
+      "version": "0.5.3",
+      "files": 526,
+      "bytes": 8935818
+    },
+    {
+      "name": "jaxlib",
+      "version": "0.5.3",
+      "files": 112,
+      "bytes": 396939259
+    },
+    {
+      "name": "jaxtyping",
+      "version": "0.2.36",
+      "files": 22,
+      "bytes": 182212
+    },
+    {
+      "name": "jinja2",
+      "version": "3.1.6",
+      "files": 32,
+      "bytes": 498175
+    },
+    {
+      "name": "markdown-it-py",
+      "version": "4.2.0",
+      "files": 76,
+      "bytes": 249230
+    },
+    {
+      "name": "markupsafe",
+      "version": "3.0.3",
+      "files": 12,
+      "bytes": 67248
+    },
+    {
+      "name": "mdurl",
+      "version": "0.1.2",
+      "files": 12,
+      "bytes": 23676
+    },
+    {
+      "name": "mpmath",
+      "version": "1.3.0",
+      "files": 93,
+      "bytes": 1955210
+    },
+    {
+      "name": "msgpack",
+      "version": "1.2.2",
+      "files": 11,
+      "bytes": 1440681
+    },
+    {
+      "name": "nest-asyncio",
+      "version": "1.6.0",
+      "files": 7,
+      "bytes": 12359
+    },
+    {
+      "name": "networkx",
+      "version": "3.6.1",
+      "files": 602,
+      "bytes": 7080946
+    },
+    {
+      "name": "nvidia-cublas-cu12",
+      "version": "12.6.4.1",
+      "files": 19,
+      "bytes": 600763979
+    },
+    {
+      "name": "nvidia-cuda-cupti-cu12",
+      "version": "12.6.80",
+      "files": 52,
+      "bytes": 34856174
+    },
+    {
+      "name": "nvidia-cuda-nvrtc-cu12",
+      "version": "12.6.77",
+      "files": 13,
+      "bytes": 64148008
+    },
+    {
+      "name": "nvidia-cuda-runtime-cu12",
+      "version": "12.6.77",
+      "files": 102,
+      "bytes": 4667381
+    },
+    {
+      "name": "nvidia-cudnn-cu12",
+      "version": "9.5.1.17",
+      "files": 32,
+      "bytes": 875245942
+    },
+    {
+      "name": "nvidia-cufft-cu12",
+      "version": "11.3.0.4",
+      "files": 16,
+      "bytes": 281139359
+    },
+    {
+      "name": "nvidia-cufile-cu12",
+      "version": "1.11.1.6",
+      "files": 13,
+      "bytes": 3179539
+    },
+    {
+      "name": "nvidia-curand-cu12",
+      "version": "10.3.7.77",
+      "files": 28,
+      "bytes": 98640953
+    },
+    {
+      "name": "nvidia-cusolver-cu12",
+      "version": "11.7.1.2",
+      "files": 18,
+      "bytes": 243636905
+    },
+    {
+      "name": "nvidia-cusparse-cu12",
+      "version": "12.5.4.2",
+      "files": 13,
+      "bytes": 293978580
+    },
+    {
+      "name": "nvidia-cusparselt-cu12",
+      "version": "0.6.3",
+      "files": 8,
+      "bytes": 237426524
+    },
+    {
+      "name": "nvidia-nccl-cu12",
+      "version": "2.26.2",
+      "files": 12,
+      "bytes": 273412250
+    },
+    {
+      "name": "nvidia-nvjitlink-cu12",
+      "version": "12.6.85",
+      "files": 12,
+      "bytes": 50498342
+    },
+    {
+      "name": "nvidia-nvtx-cu12",
+      "version": "12.6.77",
+      "files": 32,
+      "bytes": 369959
+    },
+    {
+      "name": "opt-einsum",
+      "version": "3.4.0",
+      "files": 33,
+      "bytes": 249456
+    },
+    {
+      "name": "optax",
+      "version": "0.2.8",
+      "files": 135,
+      "bytes": 1429695
+    },
+    {
+      "name": "orbax-checkpoint",
+      "version": "0.11.13",
+      "files": 172,
+      "bytes": 1576211
+    },
+    {
+      "name": "packaging",
+      "version": "26.3",
+      "files": 30,
+      "bytes": 500425
+    },
+    {
+      "name": "pillow",
+      "version": "12.3.0",
+      "files": 141,
+      "bytes": 19644627
+    },
+    {
+      "name": "pluggy",
+      "version": "1.6.0",
+      "files": 15,
+      "bytes": 66302
+    },
+    {
+      "name": "protobuf",
+      "version": "7.36.2",
+      "files": 64,
+      "bytes": 1392088
+    },
+    {
+      "name": "pygments",
+      "version": "2.21.0",
+      "files": 351,
+      "bytes": 4640636
+    },
+    {
+      "name": "pyyaml",
+      "version": "6.0.3",
+      "files": 25,
+      "bytes": 2875447
+    },
+    {
+      "name": "regex",
+      "version": "2026.9.10",
+      "files": 11,
+      "bytes": 3021683
+    },
+    {
+      "name": "requests",
+      "version": "2.34.2",
+      "files": 27,
+      "bytes": 235437
+    },
+    {
+      "name": "rich",
+      "version": "15.0.0",
+      "files": 106,
+      "bytes": 1250880
+    },
+    {
+      "name": "safetensors",
+      "version": "0.8.0",
+      "files": 16,
+      "bytes": 1338189
+    },
+    {
+      "name": "scipy",
+      "version": "1.17.1",
+      "files": 1426,
+      "bytes": 114366238
+    },
+    {
+      "name": "sentencepiece",
+      "version": "0.2.2",
+      "files": 18,
+      "bytes": 2943451
+    },
+    {
+      "name": "simplejson",
+      "version": "4.1.2",
+      "files": 51,
+      "bytes": 610029
+    },
+    {
+      "name": "sympy",
+      "version": "1.14.0",
+      "files": 1572,
+      "bytes": 26942317
+    },
+    {
+      "name": "tensorstore",
+      "version": "0.1.85",
+      "files": 13,
+      "bytes": 67584891
+    },
+    {
+      "name": "tokenizers",
+      "version": "0.21.4",
+      "files": 29,
+      "bytes": 9566332
+    },
+    {
+      "name": "torch",
+      "version": "2.7.1",
+      "files": 11014,
+      "bytes": 1614107639
+    },
+    {
+      "name": "tqdm",
+      "version": "4.70.1",
+      "files": 41,
+      "bytes": 235361
+    },
+    {
+      "name": "transformers",
+      "version": "4.53.2",
+      "files": 1994,
+      "bytes": 48126144
+    },
+    {
+      "name": "triton",
+      "version": "3.3.1",
+      "files": 348,
+      "bytes": 563326083
+    },
+    {
+      "name": "typing-extensions",
+      "version": "4.16.0",
+      "files": 6,
+      "bytes": 182924
+    },
+    {
+      "name": "urllib3",
+      "version": "2.8.0",
+      "files": 43,
+      "bytes": 452542
+    },
+    {
+      "name": "zipp",
+      "version": "4.1.0",
+      "files": 13,
+      "bytes": 23775
+    }
+  ],
+  "remaining": [
+    "augmax==0.3.4",
+    "av==15.1.0",
+    "filelock==4.0.3",
+    "iniconfig==2.3.0",
+    "ml-dtypes==0.5.4",
+    "numpy==1.26.4",
+    "pyarrow==21.0.0",
+    "pytest==9.1.1",
+    "setuptools==84.0.0",
+    "torchvision==0.22.1"
+  ]
+}

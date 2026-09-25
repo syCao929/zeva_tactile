@@ -36,8 +36,12 @@ class PolicyInjectionPrior(nn.Module):
         self.cfg = cfg or PolicyInjectionConfig()
         self.global_to_anchors = nn.Linear(self.cfg.global_dim, self.cfg.num_anchors * self.cfg.hidden_dim)
         self.anchor_position = nn.Parameter(torch.empty(1, self.cfg.num_anchors, self.cfg.hidden_dim))
-        self.phase_query = nn.Sequential(nn.LayerNorm(self.cfg.phase_dim), nn.Linear(self.cfg.phase_dim, self.cfg.hidden_dim))
-        self.effect_project = nn.Sequential(nn.LayerNorm(self.cfg.effect_dim), nn.Linear(self.cfg.effect_dim, self.cfg.hidden_dim))
+        self.phase_query = nn.Sequential(
+            nn.LayerNorm(self.cfg.phase_dim), nn.Linear(self.cfg.phase_dim, self.cfg.hidden_dim)
+        )
+        self.effect_project = nn.Sequential(
+            nn.LayerNorm(self.cfg.effect_dim), nn.Linear(self.cfg.effect_dim, self.cfg.hidden_dim)
+        )
         self.effect_position = nn.Parameter(torch.empty(1, self.cfg.effect_history_length, self.cfg.hidden_dim))
         self.bos_effect = nn.Parameter(torch.empty(1, 1, self.cfg.effect_dim))
         self.effect_attention = nn.MultiheadAttention(self.cfg.hidden_dim, self.cfg.num_heads, batch_first=True)
@@ -78,6 +82,8 @@ class PolicyInjectionPrior(nn.Module):
         z_phase: Tensor,
         z_effect: Tensor | BriefInteractionTrace,
         effect_valid: Tensor | None = None,
+        *,
+        current_effect_residual: Tensor | None = None,
     ) -> tuple[Tensor, Tensor]:
         """Return Gaussian mean and std, both ``[B,horizon,action_dim]``."""
         if isinstance(z_effect, BriefInteractionTrace):
@@ -99,12 +105,23 @@ class PolicyInjectionPrior(nn.Module):
             effect_valid = torch.ones(z_effect.shape[:2], dtype=torch.bool, device=z_effect.device)
         if effect_valid.shape != z_effect.shape[:2]:
             raise ValueError("effect_valid must be [B,effect_history_length]")
-        anchors = self.global_to_anchors(z_global).view(
-            -1, self.cfg.num_anchors, self.cfg.hidden_dim
-        ) + self.anchor_position
+        anchors = (
+            self.global_to_anchors(z_global).view(-1, self.cfg.num_anchors, self.cfg.hidden_dim) + self.anchor_position
+        )
         phase_query = self.phase_query(z_phase)
         bos = self.bos_effect.expand(z_effect.shape[0], self.cfg.effect_history_length, -1)
         effect_input = torch.where(effect_valid.unsqueeze(-1), z_effect, bos)
+        if current_effect_residual is not None:
+            expected = (z_effect.shape[0], self.cfg.effect_dim)
+            if current_effect_residual.shape != expected:
+                raise ValueError(
+                    f"Expected current_effect_residual {expected}, got {tuple(current_effect_residual.shape)}"
+                )
+            # Current tactile observations exist before the first completed
+            # visual transition. Preserve BOS at zero gate and add evidence
+            # after masking so it can learn during episode warmup as well.
+            effect_input = effect_input.clone()
+            effect_input[:, -1] = effect_input[:, -1] + current_effect_residual
         effect_tokens = self.effect_project(effect_input) + self.effect_position
         effect_context, _ = self.effect_attention(
             phase_query.unsqueeze(1), effect_tokens, effect_tokens, need_weights=False

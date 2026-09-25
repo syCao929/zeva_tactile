@@ -28,6 +28,13 @@ from cosmos_framework.model.generator.mot.context_parallel_utils import (
 from cosmos_framework.model.generator.mot.domain_aware_linear import DomainAwareLinear
 from cosmos_framework.model.generator.mot.modeling_utils import TimestepEmbedder, has_noisy_tokens
 from cosmos_framework.model.generator.utils.memory import MemoryState
+from cosmos_framework.model.zeva.tactile_encoder import FrozenTactileEncoderWithProjector, TactileEncoderAdapter
+from cosmos_framework.model.zeva.tactile_memory import (
+    TactileBIT,
+    TactileBITConfig,
+    TactileBehaviorConfig,
+    TactileBehaviorHead,
+)
 
 
 class Cosmos3VFMNetworkConfig(PretrainedConfig):
@@ -244,6 +251,33 @@ class Cosmos3VFMNetwork(PreTrainedModel):
             self.behavior_prior_leading_condition_steps = int(
                 behavior_cfg.get("leading_condition_steps", 1)
             )
+            if bool(behavior_cfg.get("tactile_enabled", False)):
+                tactile_memory_steps = int(behavior_cfg.get("tactile_memory_steps", 30))
+                tactile_dim = int(behavior_cfg.get("tactile_token_dim", 256))
+                self.tactile_encoder_adapter = TactileEncoderAdapter()
+                self.tactile_encoder_projector = FrozenTactileEncoderWithProjector()
+                self.tactile_bit = TactileBIT(
+                    TactileBITConfig(token_dim=tactile_dim, memory_steps=tactile_memory_steps)
+                )
+                self.tactile_behavior_head = TactileBehaviorHead(
+                    TactileBehaviorConfig(
+                        memory_dim=tactile_dim,
+                        phase_dim=prior_cfg.phase_dim,
+                        effect_dim=prior_cfg.effect_dim,
+                    )
+                )
+                # Zero gates preserve the original Zeva path at initialization.
+                self.tactile_phase_gate = nn.Parameter(torch.zeros(1), requires_grad=False)
+                self.tactile_effect_gate = nn.Parameter(torch.zeros(1))
+                self.tactile_encoder_checkpoint = behavior_cfg.get("tactile_encoder_checkpoint")
+            else:
+                self.tactile_encoder_adapter = None
+                self.tactile_encoder_projector = None
+                self.tactile_bit = None
+                self.tactile_behavior_head = None
+                self.tactile_phase_gate = None
+                self.tactile_effect_gate = None
+                self.tactile_encoder_checkpoint = None
         else:
             self.behavior_pbd = None
             self.behavior_adapter = None
@@ -257,6 +291,13 @@ class Cosmos3VFMNetwork(PreTrainedModel):
             self.behavior_prior_dropout_rate = 0.0
             self.behavior_prior_inference_guidance_scale = 1.0
             self.behavior_prior_leading_condition_steps = 1
+            self.tactile_encoder_adapter = None
+            self.tactile_encoder_projector = None
+            self.tactile_bit = None
+            self.tactile_behavior_head = None
+            self.tactile_phase_gate = None
+            self.tactile_effect_gate = None
+            self.tactile_encoder_checkpoint = None
 
         proprio_cfg = config.proprio_condition_config
         if proprio_cfg is not None and proprio_cfg.get("enabled", False):
@@ -357,6 +398,21 @@ class Cosmos3VFMNetwork(PreTrainedModel):
                 # until the support-memory adaptation stage trains this path.
                 nn.init.zeros_(self.behavior_online_projector.weight)
                 nn.init.zeros_(self.behavior_online_projector.bias)
+            if self.tactile_bit is not None and self.tactile_behavior_head is not None:
+                if self.tactile_encoder_checkpoint and any(
+                    parameter.is_meta for parameter in self.tactile_encoder_projector.encoder.encoder.parameters()
+                ):
+                    state = torch.load(self.tactile_encoder_checkpoint, map_location="cpu", weights_only=True)
+                    self.tactile_encoder_projector.encoder.encoder.load_state_dict(state, strict=True)
+                self.tactile_encoder_projector.encoder.requires_grad_(False)
+                self.tactile_encoder_projector.encoder.eval()
+                self.tactile_encoder_projector.encoder.encoder.reset_patch_map()
+                nn.init.xavier_uniform_(self.tactile_encoder_projector.projector.projection.weight)
+                nn.init.zeros_(self.tactile_encoder_projector.projector.projection.bias)
+                self.tactile_bit.reset_parameters()
+                self.tactile_behavior_head.reset_parameters()
+                nn.init.zeros_(self.tactile_phase_gate)
+                nn.init.zeros_(self.tactile_effect_gate)
         if self.proprio_projector is not None:
             nn.init.xavier_uniform_(self.proprio_projector.weight)
             nn.init.zeros_(self.proprio_projector.bias)
@@ -377,6 +433,38 @@ class Cosmos3VFMNetwork(PreTrainedModel):
             torch.nn.init.trunc_normal_(self.sound_modality_embed, std=std, a=-3 * std, b=3 * std)
 
         self.language_model.init_weights(buffer_device=buffer_device)
+
+    def encode_tactile_behavior(
+        self, tactile_state: torch.Tensor, tactile_valid: torch.Tensor | None = None
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Encode a causal raw-state window into Zeva phase/effect candidates."""
+        if self.tactile_encoder_projector is None or self.tactile_bit is None or self.tactile_behavior_head is None:
+            raise RuntimeError("tactile behavior is disabled")
+        state = torch.as_tensor(tactile_state)
+        if state.ndim != 3 or state.shape[-1] < 1972:
+            raise ValueError(f"Expected tactile_state [B,T,1972], got {tuple(state.shape)}")
+        forces = self.tactile_encoder_adapter.prepare_current_frame(state)
+        encoded = self.tactile_encoder_projector(forces)
+        # The frozen encoder/projector follows the autocast input dtype, while
+        # FSDP may keep the trainable BIT parameters in fp32.  Match the BIT
+        # input projection dtype before entering the memory module.
+        encoded = encoded.to(dtype=self.tactile_bit.input_norm.weight.dtype)
+        valid = None if tactile_valid is None else torch.as_tensor(tactile_valid, device=state.device)
+        bit_trace = self.tactile_bit(encoded, valid_mask=valid)
+        if valid is None:
+            latest = bit_trace[:, -1]
+        else:
+            valid = valid.to(dtype=torch.bool)
+            # The dataset left-pads episode starts.  Find the last true mask
+            # directly so a one-frame window selects its current frame rather
+            # than the leading zero-padding row.
+            last_valid = valid.shape[1] - 1 - valid.flip(dims=(1,)).long().argmax(dim=1)
+            latest = bit_trace[torch.arange(state.shape[0], device=state.device), last_valid]
+        outputs = self.tactile_behavior_head(latest)
+        if valid is not None:
+            observed = valid.any(dim=1, keepdim=True)
+            outputs = tuple(torch.where(observed, value, torch.zeros_like(value)) for value in outputs)
+        return outputs
 
     def generate_reasoner_text(
         self,
@@ -1012,11 +1100,20 @@ class Cosmos3VFMNetwork(PreTrainedModel):
             action_lengths = {int(tokens.shape[0]) for tokens in action.tokens}
             if len(action_lengths) != 1:
                 raise ValueError("Zeva policy injection requires a fixed action horizon within each batch")
+            tactile_effect = getattr(packed_seq, "behavior_tactile_effect", None)
+            tactile_residual = None
+            if tactile_effect is not None:
+                # Read the gate inside the FSDP forward, where parameters are
+                # materialized. The prior adds this after its BOS substitution.
+                if self.tactile_effect_gate is None:
+                    raise ValueError("Tactile features require the tactile policy branch")
+                tactile_residual = torch.tanh(self.tactile_effect_gate) * tactile_effect
             prior_mean, prior_std = self.behavior_pbd(
                 packed_seq.behavior_global,
                 packed_seq.behavior_phase,
                 packed_seq.behavior_effect,
                 packed_seq.behavior_effect_valid,
+                current_effect_residual=tactile_residual,
             )
             residual = self.behavior_adapter(
                 prior_mean,

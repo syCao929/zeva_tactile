@@ -1,0 +1,40 @@
+{
+  "source": "/workspace/mnt/sqzhang26/zeva-work/logs/v3-joint18-20260925.log",
+  "snapshot_at": "2026-09-25T15:43:45.773776+08:00",
+  "last_logged_at": "09-25 15:43:10 Asia/Shanghai",
+  "records": 313,
+  "first_step": 1,
+  "last_step": 2690,
+  "first_loss": 16.4367,
+  "last_loss": 1.0701,
+  "trailing_mean_points": 20,
+  "last_trailing_mean": 0.6911750000000001,
+  "definition": "Rank-0 current-batch total training loss, not action-only loss or a multi-rank mean",
+  "sampling": "Startup steps 1-50 logged individually; subsequent records usually every 10 steps",
+  "validation_records": [
+    {
+      "step": 0,
+      "loss": 48.134846
+    },
+    {
+      "step": 500,
+      "loss": null
+    },
+    {
+      "step": 1000,
+      "loss": null
+    },
+    {
+      "step": 1500,
+      "loss": null
+    },
+    {
+      "step": 2000,
+      "loss": null
+    },
+    {
+      "step": 2500,
+      "loss": null
+    }
+  ]
+}

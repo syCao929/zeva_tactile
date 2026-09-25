@@ -1,0 +1,137 @@
+{
+  "observed_at": "2026-09-25T09:08:37.372584+00:00",
+  "scope": "Read-only source environment audit; GPUs hidden; no source environment files modified",
+  "environment": "/workspace/mnt/sqzhang26/FactileLDM/env/.venv",
+  "python": "3.11.9 | packaged by conda-forge | (main, Apr 19 2024, 18:36:13) [GCC 12.3.0]",
+  "python_executable": "/workspace/mnt/sqzhang26/FactileLDM/env/.venv/bin/python",
+  "package_versions": {
+    "torch": "2.7.1",
+    "torchvision": null,
+    "transformers": "4.53.2",
+    "numpy": "2.4.6",
+    "safetensors": "0.8.0",
+    "sentencepiece": "0.2.2",
+    "einops": "0.8.2",
+    "jax": "0.5.3",
+    "jaxlib": "0.5.3",
+    "flax": "0.10.2",
+    "orbax-checkpoint": "0.11.13",
+    "jaxtyping": "0.2.36",
+    "beartype": "0.19.0",
+    "augmax": "0.4.1",
+    "typing-extensions": "4.16.0",
+    "pyarrow": null,
+    "av": null,
+    "pytest": null,
+    "tyro": "1.0.16",
+    "lerobot": "0.1.0",
+    "torchcodec": null
+  },
+  "missing_project_dependencies": [
+    "torchvision",
+    "pyarrow",
+    "av",
+    "pytest"
+  ],
+  "project_version_conflicts": {
+    "numpy": {
+      "installed": "2.4.6",
+      "required": ">=1.26,<2"
+    },
+    "augmax": {
+      "installed": "0.4.1",
+      "required": "==0.3.4"
+    }
+  },
+  "torch": {
+    "version": "2.7.1+cu126",
+    "compiled_cuda": "12.6",
+    "visible_cuda_devices": 0,
+    "gpu_runtime_tested": false
+  },
+  "jax_cpu_devices": [
+    "TFRT_CPU_0"
+  ],
+  "source": {
+    "root": "/workspace/mnt/sqzhang26/openpi-3d-tactile",
+    "source_dir": "/workspace/mnt/sqzhang26/openpi-3d-tactile/src",
+    "reference_commit": "215abfb217dbac7d5f1273282331b9b1866c0479",
+    "checkout_commit": "7a184ca5062bb2d4b00fa92af33cc21b74e90979",
+    "source_compatible": true,
+    "source_sha256": {
+      "models/pi0_config.py": "d321858c30b398126035ea2b6da09e1c422eeeebb5ebf8df631daf9dc77647fa",
+      "models_pytorch/pi0_pytorch.py": "dcd7b6f508808ce4b7170a1720a4c62c6da04edae3652d16c94a469dca924e16"
+    }
+  },
+  "preflight": {
+    "python": "/workspace/mnt/sqzhang26/FactileLDM/env/.venv/bin/python",
+    "dependencies": {
+      "torch": {
+        "installed": true,
+        "version": "2.7.1"
+      },
+      "transformers": {
+        "installed": true,
+        "version": "4.53.2"
+      },
+      "safetensors": {
+        "installed": true,
+        "version": "0.8.0"
+      },
+      "sentencepiece": {
+        "installed": true,
+        "version": "0.2.2"
+      },
+      "jax": {
+        "installed": true,
+        "version": "0.5.3"
+      },
+      "flax": {
+        "installed": true,
+        "version": "0.10.2"
+      },
+      "jaxtyping": {
+        "installed": true,
+        "version": "0.2.36"
+      },
+      "beartype": {
+        "installed": true,
+        "version": "0.19.0"
+      },
+      "einops": {
+        "installed": true,
+        "version": "0.8.2"
+      }
+    },
+    "errors": [
+      "OpenPI transformers_replace patch is unavailable or incompatible"
+    ],
+    "transformers_patch": {
+      "ok": false,
+      "error": "ModuleNotFoundError: No module named 'transformers.models.siglip.check'"
+    },
+    "openpi": {
+      "importable": true,
+      "policy_file": "/workspace/mnt/sqzhang26/openpi-3d-tactile/src/openpi/models_pytorch/pi0_pytorch.py",
+      "config_file": "/workspace/mnt/sqzhang26/openpi-3d-tactile/src/openpi/models/pi0_config.py"
+    },
+    "ready": false
+  },
+  "openpi_environment_alias": {
+    "path": "/workspace/mnt/sqzhang26/openpi-3d-tactile/.venv",
+    "is_symlink": true,
+    "resolved_path": "/workspace/mnt/sqzhang26/FactileLDM/env/.venv",
+    "same_environment": true
+  },
+  "pip_check": {
+    "checked_packages": 95,
+    "incompatibilities": 35,
+    "main_findings": [
+      "Incomplete old LeRobot installation has many missing optional ecosystem packages",
+      "OpenPI package metadata requires multiple unavailable ecosystem dependencies",
+      "OpenPI and openpi-client require numpy<2, source environment has numpy 2.4.6"
+    ]
+  },
+  "recommendation": "Build dedicated envs/pi0 using project requirements and official transformer patches; retain source environment unchanged. Copy package files rather than mutating shared hardlinked cache inodes.",
+  "usable_as_is": false
+}

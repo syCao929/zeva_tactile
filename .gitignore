@@ -18,7 +18,6 @@
 # 转换后的训练数据，可由 tools/convert_xhand_dataset.py 重建
 /datasets/
 
-/logs/
 /tmp/
 
 # RoboCasa365 仿真器，按官方文档单独获取

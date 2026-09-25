@@ -1,0 +1,303 @@
+{
+  "bytes_read": 6360550,
+  "comparisons": {
+    "net.proprio_projector.weight": {
+      "shape": [
+        4096,
+        22
+      ],
+      "exact_equal": true,
+      "max_diff": 0.0,
+      "v2_finite": true,
+      "stage2_finite": true
+    },
+    "net.proprio_projector.bias": {
+      "shape": [
+        4096
+      ],
+      "exact_equal": true,
+      "max_diff": 0.0,
+      "v2_finite": true,
+      "stage2_finite": true
+    }
+  },
+  "stage2_behavior": {
+    "net.behavior_pbd.anchor_position": {
+      "shape": [
+        1,
+        8,
+        256
+      ],
+      "finite": true,
+      "abs_max": 0.0810546875
+    },
+    "net.behavior_pbd.effect_position": {
+      "shape": [
+        1,
+        4,
+        256
+      ],
+      "finite": true,
+      "abs_max": 0.07373046875
+    },
+    "net.behavior_pbd.bos_effect": {
+      "shape": [
+        1,
+        1,
+        128
+      ],
+      "finite": true,
+      "abs_max": 0.07275390625
+    },
+    "net.behavior_pbd.global_to_anchors.weight": {
+      "shape": [
+        2048,
+        256
+      ],
+      "finite": true,
+      "abs_max": 0.0673828125
+    },
+    "net.behavior_pbd.global_to_anchors.bias": {
+      "shape": [
+        2048
+      ],
+      "finite": true,
+      "abs_max": 0.0172119140625
+    },
+    "net.behavior_pbd.phase_query.0.weight": {
+      "shape": [
+        128
+      ],
+      "finite": true,
+      "abs_max": 1.0234375
+    },
+    "net.behavior_pbd.phase_query.0.bias": {
+      "shape": [
+        128
+      ],
+      "finite": true,
+      "abs_max": 0.0272216796875
+    },
+    "net.behavior_pbd.phase_query.1.weight": {
+      "shape": [
+        256,
+        128
+      ],
+      "finite": true,
+      "abs_max": 0.162109375
+    },
+    "net.behavior_pbd.phase_query.1.bias": {
+      "shape": [
+        256
+      ],
+      "finite": true,
+      "abs_max": 0.021484375
+    },
+    "net.behavior_pbd.effect_project.0.weight": {
+      "shape": [
+        128
+      ],
+      "finite": true,
+      "abs_max": 1.015625
+    },
+    "net.behavior_pbd.effect_project.0.bias": {
+      "shape": [
+        128
+      ],
+      "finite": true,
+      "abs_max": 0.024658203125
+    },
+    "net.behavior_pbd.effect_project.1.weight": {
+      "shape": [
+        256,
+        128
+      ],
+      "finite": true,
+      "abs_max": 0.15234375
+    },
+    "net.behavior_pbd.effect_project.1.bias": {
+      "shape": [
+        256
+      ],
+      "finite": true,
+      "abs_max": 0.017822265625
+    },
+    "net.behavior_pbd.effect_attention.in_proj_weight": {
+      "shape": [
+        768,
+        256
+      ],
+      "finite": true,
+      "abs_max": 0.10888671875
+    },
+    "net.behavior_pbd.effect_attention.in_proj_bias": {
+      "shape": [
+        768
+      ],
+      "finite": true,
+      "abs_max": 0.0224609375
+    },
+    "net.behavior_pbd.effect_attention.out_proj.weight": {
+      "shape": [
+        256,
+        256
+      ],
+      "finite": true,
+      "abs_max": 0.13671875
+    },
+    "net.behavior_pbd.effect_attention.out_proj.bias": {
+      "shape": [
+        256
+      ],
+      "finite": true,
+      "abs_max": 0.0296630859375
+    },
+    "net.behavior_pbd.effect_norm.weight": {
+      "shape": [
+        256
+      ],
+      "finite": true,
+      "abs_max": 1.03125
+    },
+    "net.behavior_pbd.effect_norm.bias": {
+      "shape": [
+        256
+      ],
+      "finite": true,
+      "abs_max": 0.035888671875
+    },
+    "net.behavior_pbd.effect_gate.0.weight": {
+      "shape": [
+        512
+      ],
+      "finite": true,
+      "abs_max": 1.0234375
+    },
+    "net.behavior_pbd.effect_gate.0.bias": {
+      "shape": [
+        512
+      ],
+      "finite": true,
+      "abs_max": 0.0322265625
+    },
+    "net.behavior_pbd.effect_gate.1.weight": {
+      "shape": [
+        256,
+        512
+      ],
+      "finite": true,
+      "abs_max": 0.125
+    },
+    "net.behavior_pbd.effect_gate.1.bias": {
+      "shape": [
+        256
+      ],
+      "finite": true,
+      "abs_max": 0.02783203125
+    },
+    "net.behavior_pbd.progress_attention.in_proj_weight": {
+      "shape": [
+        768,
+        256
+      ],
+      "finite": true,
+      "abs_max": 0.119140625
+    },
+    "net.behavior_pbd.progress_attention.in_proj_bias": {
+      "shape": [
+        768
+      ],
+      "finite": true,
+      "abs_max": 0.016845703125
+    },
+    "net.behavior_pbd.progress_attention.out_proj.weight": {
+      "shape": [
+        256,
+        256
+      ],
+      "finite": true,
+      "abs_max": 0.12353515625
+    },
+    "net.behavior_pbd.progress_attention.out_proj.bias": {
+      "shape": [
+        256
+      ],
+      "finite": true,
+      "abs_max": 0.01361083984375
+    },
+    "net.behavior_pbd.context_norm.weight": {
+      "shape": [
+        256
+      ],
+      "finite": true,
+      "abs_max": 0.99609375
+    },
+    "net.behavior_pbd.context_norm.bias": {
+      "shape": [
+        256
+      ],
+      "finite": true,
+      "abs_max": 0.008544921875
+    },
+    "net.behavior_pbd.distribution_head.0.weight": {
+      "shape": [
+        256,
+        256
+      ],
+      "finite": true,
+      "abs_max": 0.12451171875
+    },
+    "net.behavior_pbd.distribution_head.0.bias": {
+      "shape": [
+        256
+      ],
+      "finite": true,
+      "abs_max": 0.0130615234375
+    },
+    "net.behavior_pbd.distribution_head.2.weight": {
+      "shape": [
+        1152,
+        256
+      ],
+      "finite": true,
+      "abs_max": 0.1396484375
+    },
+    "net.behavior_pbd.distribution_head.2.bias": {
+      "shape": [
+        1152
+      ],
+      "finite": true,
+      "abs_max": 0.06005859375
+    },
+    "net.behavior_adapter.prior_to_action_embedding.weight": {
+      "shape": [
+        4096,
+        18
+      ],
+      "finite": true,
+      "abs_max": 0.044921875
+    },
+    "net.behavior_adapter.prior_to_action_embedding.bias": {
+      "shape": [
+        4096
+      ],
+      "finite": true,
+      "abs_max": 0.047119140625
+    },
+    "net.behavior_global_projector.weight": {
+      "shape": [
+        4096,
+        256
+      ],
+      "finite": true,
+      "abs_max": 0.051513671875
+    },
+    "net.behavior_global_projector.bias": {
+      "shape": [
+        4096
+      ],
+      "finite": true,
+      "abs_max": 0.0147705078125
+    }
+  }
+}

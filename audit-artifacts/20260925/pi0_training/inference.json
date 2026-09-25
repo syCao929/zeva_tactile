@@ -1,0 +1,19 @@
+{
+  "checkpoint": "/workspace/mnt/sqzhang26/zeva-work/runs/pi0/smoke-baseline-20260925/checkpoints/step_00000003",
+  "step": 3,
+  "mode": "baseline",
+  "split": "val",
+  "seed": 42,
+  "num_steps": 10,
+  "sample_count": 2,
+  "sample_indices": [
+    0,
+    1491
+  ],
+  "metrics": {
+    "arm_mae_rad": 0.20050799949482703,
+    "arm_rmse_rad": 0.26766522523059344,
+    "hand_mae_rad": 0.4794457412038658,
+    "hand_rmse_rad": 0.7040419824955124
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "note": "Same 519 held-out windows, identical CPU-fp32 outputs; only batch composition changes.",
+  "orders": {
+    "sequential": {
+      "total": 0.6972474501683161,
+      "action": 0.0050723895573845275,
+      "vision": 0.002078059564631146,
+      "loss_task": 0.0,
+      "loss_phase": 0.0005819710816677588,
+      "loss_effect": 2.760155211962186,
+      "effect_contrastive": 1.6934469351401695,
+      "effect_diversity": 0.3159122978265469,
+      "effect_visual": 0.1544397899737725,
+      "effect_action": 0.011261763180104585,
+      "effect_align": 0.39123745354322287,
+      "effect_variance": 0.5011481651893028,
+      "effect_covariance": 5.24902471281015
+    },
+    "shuffle_seed42": {
+      "total": 0.4095610393927647,
+      "action": 0.005067409098578187,
+      "vision": 0.0020776175858023076,
+      "loss_task": 0.0,
+      "loss_phase": 0.0005819147272492185,
+      "loss_effect": 1.6094312887925368,
+      "effect_contrastive": 1.03387714441006,
+      "effect_diversity": 0.02205627640270485,
+      "effect_visual": 0.15441800424685845,
+      "effect_action": 0.011254515369924216,
+      "effect_align": 0.39131376926715555,
+      "effect_variance": 0.3655895315683805,
+      "effect_covariance": 3.705356396161593
+    },
+    "shuffle_seed43": {
+      "total": 0.41644273675405064,
+      "action": 0.005063654421470486,
+      "vision": 0.0020771453031696954,
+      "loss_task": 0.0,
+      "loss_phase": 0.0005810582712561322,
+      "loss_effect": 1.6369753232369055,
+      "effect_contrastive": 1.046092521227323,
+      "effect_diversity": 0.030962796987464222,
+      "effect_visual": 0.15439920723438263,
+      "effect_action": 0.01124985901495585,
+      "effect_align": 0.3912391694692465,
+      "effect_variance": 0.3697050720453262,
+      "effect_covariance": 3.763213198001568
+    },
+    "shuffle_seed44": {
+      "total": 0.41925093852556666,
+      "action": 0.005065098974423913,
+      "vision": 0.0020772142282042367,
+      "loss_task": 0.0,
+      "loss_phase": 0.0005811366989711622,
+      "loss_effect": 1.6482020451472357,
+      "effect_contrastive": 1.0531433765704816,
+      "effect_diversity": 0.03563942827929098,
+      "effect_visual": 0.15439311220095708,
+      "effect_action": 0.01125577325717761,
+      "effect_align": 0.39117304774431083,
+      "effect_variance": 0.3697152804869872,
+      "effect_covariance": 3.7505970111260045
+    }
+  }
+}

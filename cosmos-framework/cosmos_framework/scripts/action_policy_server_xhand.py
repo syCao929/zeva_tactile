@@ -4,12 +4,11 @@
 """WebSocket policy server for the UR7e + XHand policy, speaking the openpi /
 TactileTTT robot-client protocol.
 
-The robot client (``TactileTTT_client_multi.py``) is **unmodified**. It is
-data-driven off the dataset's ``meta/info.json``, so it sends whichever cameras
-and action names that file declares::
+The robot client reads the dataset's ``meta/info.json`` for state/action order.
+The base observation schema is::
 
     observation/state            [state_dim] float32   (info.json state order)
-    observation/<camera>_image   HWC uint8             (one key per camera)
+    observation.images.<camera>  HWC uint8             (cam_left and cam_front)
     prompt                       str
     current_action_step          int
     reset_tactile_memory         bool                  (first request of a run)
@@ -40,13 +39,18 @@ Three things this server does that the RoboCasa one does not:
    actions, so running it with ``--query-frequency 4`` makes each request equal
    exactly one CTE transition. The server then reconstructs
    ``cte_boundary_images`` / ``cte_transition_actions`` itself and the client
-   needs no code change. See ``_BoundaryBuffer`` for the attribution rule.
+   must execute four actions per query. See ``_BoundaryBuffer`` for the attribution rule.
 
    This assumes the robot executed the actions this server returned, in order.
    If the client clamps or drops actions (check for action-deadzone flags), the
    reconstructed transition differs from what physically happened — at that
-   point, send the history from the client instead (it already does exactly this
-   for tactile state via its ``StateHistoryBuffer``).
+   point this reconstruction cannot represent the executed history.
+
+Tactile checkpoints additionally require a dense, client-sampled 15 Hz window:
+``tactile_state``, ``tactile_valid``, ``tactile_frame_indices``, ``tactile_fps``,
+``control_frame_index`` and ``episode_id``. See ``docs/xhand_tactile_serving.md``
+and ``tools/run_xhand_tactile_client.py`` for the adapter. Query frames alone
+cannot reconstruct this history.
 
 Usage::
 
@@ -77,12 +81,13 @@ import numpy as np
 import torch
 
 from cosmos_framework.data.generator.action.action_processing import resolve_action_normalization
-# The framework's loguru wrapper, NOT stdlib `logging`: stdlib drops INFO records
-# unless a handler is configured, so every operational message from this module
-# (startup, per-request action shape, boundary-frame count) would vanish silently —
-# exactly the lines you need when debugging a robot deployment.
-from cosmos_framework.utils import log
 from cosmos_framework.data.generator.action.domain_utils import get_domain_id
+from cosmos_framework.inference.xhand_tactile import (
+    TACTILE_FPS,
+    TACTILE_MEMORY_STEPS,
+    TactileWindow,
+    XHandTactileInput,
+)
 from cosmos_framework.scripts.action_policy_server_robocasa365_zeva import (
     RobolabPolicyService,
     RobolabServerArgs,
@@ -91,6 +96,12 @@ from cosmos_framework.scripts.action_policy_server_robocasa365_zeva import (
     _load_openpi_websocket_policy_server,
     _resize_rgb_uint8,
 )
+
+# The framework's loguru wrapper, NOT stdlib `logging`: stdlib drops INFO records
+# unless a handler is configured, so every operational message from this module
+# (startup, per-request action shape, boundary-frame count) would vanish silently —
+# exactly the lines you need when debugging a robot deployment.
+from cosmos_framework.utils import log
 
 # One CTE timestep == one Wan-VAE latent frame == four raw controls.
 # Keep in sync with CausalTransitionEncoderConfig.effect_window_transitions.
@@ -115,8 +126,19 @@ _COMPOSITE_WRIST_CAMERA = "observation.images.cam_front"
 # observation.state layout of the ur7e_xhand embodiment [1972]:
 #   [0:6] arm joints pos, [6:12] arm joints vel, [12:28] ee pose,
 #   [28:52] hand joints pos/torque interleaved, [52:1972] tactile.
-# Proprio mirrors XHandLeRobotDataset's "arm22": arm pos + ee pose.
-_PROPRIO_INDICES = tuple(range(6)) + tuple(range(12, 28))
+# Proprio mirrors XHandLeRobotDataset's "joint18" -- the arm + hand joint *positions*,
+# i.e. exactly the 18-D absolute-joint-position space the action lives in.
+#
+# Two traps here, both silent (see `_client_proprio` -- it only length-checks):
+#   * `[28:52]` interleaves position and torque, so the hand positions are the EVEN
+#     offsets only. Reading `range(28, 40)` would feed the policy torque readings as
+#     joint angles.
+#   * These indices must stay in lockstep with the dataset's `_STATE_INDICES["joint18"]`;
+#     `action_policy_server_xhand_test.py` asserts the two are equal.
+#
+# `joint18` reads joint positions directly from the controllers on both the
+# data-collection and deployment rigs.
+_PROPRIO_INDICES = tuple(range(6)) + tuple(range(28, 52, 2))
 
 
 class _BoundaryBuffer:
@@ -220,6 +242,21 @@ class XHandPolicyService(RobolabPolicyService):
                 "embodiment is 18-D (6 arm + 12 hand joint positions). Check --action-dim."
             )
 
+        # XHand is "Case A" in the sequence planner (transforms.py:318-327): unlike DROID,
+        # nothing is ever prepended to the action stream, so the model emits exactly
+        # `action_chunk_size` *predicted* rows and `infer`'s `action[history_length:]`
+        # would silently drop a real action -- shifting every executed command, and the
+        # boundary actions `_BoundaryBuffer` hands to the CTE, one frame late relative to
+        # training. DROID/RoboCasa can trim because their row 0 is the state anchor; here
+        # there is no such row. Zeva's own deploy recipes run `--history-length 0`.
+        if int(self.cfg.history_length) != 0:
+            raise ValueError(
+                f"--history-length={self.cfg.history_length} is not valid for the XHand server: "
+                "no state row is prepended to the action stream (transforms.py Case A), so there "
+                "is nothing to trim and a positive value silently discards a predicted action. "
+                "Use --history-length 0 (and --use-state is a no-op here, leave it off)."
+            )
+
         self._normalizer = self._build_normalizer(args)
         self._cte_buffer = _BoundaryBuffer(
             stride=_CTE_STRIDE,
@@ -227,14 +264,27 @@ class XHandPolicyService(RobolabPolicyService):
             max_frames=int(args.cte_boundary_frames),
         )
         self._episode_reset_pending = True
+        self._init_tactile_input()
 
         if args.require_cte_history and not self._zeva_enabled:
             raise ValueError("--require-cte-history needs Zeva enabled (--cte-checkpoint)")
 
         log.info(
             f"[xhand-policy-server] ready cameras(composite)={_COMPOSITE_LEFT_CAMERA}+{_COMPOSITE_WRIST_CAMERA} "
-            f"proprio_dim={len(_PROPRIO_INDICES)} cte_stride={_CTE_STRIDE} zeva={self._zeva_enabled}"
+            f"proprio_dim={len(_PROPRIO_INDICES)} cte_stride={_CTE_STRIDE} zeva={self._zeva_enabled} "
+            f"tactile={self._tactile_input is not None}"
         )
+
+    def _init_tactile_input(self) -> None:
+        behavior = self.model.config.behavior_stage2
+        self._tactile_input = None
+        if not behavior.tactile_enabled:
+            return
+        if not self._zeva_enabled:
+            raise ValueError("Tactile stage-2 serving requires the CTE checkpoint and task-context bank")
+        if behavior.tactile_memory_steps != TACTILE_MEMORY_STEPS or self.cfg.conditioning_fps != TACTILE_FPS:
+            raise ValueError("XHand tactile serving requires the trained 30-frame window at 15 Hz")
+        self._tactile_input = XHandTactileInput(query_stride=_CTE_STRIDE)
 
     # ---------------------------------------------------------------- normalizer
     def _build_normalizer(self, args: XHandServerArgs) -> Any:
@@ -300,7 +350,9 @@ class XHandPolicyService(RobolabPolicyService):
             )
         return np.asarray(state[list(_PROPRIO_INDICES)], dtype=np.float32)
 
-    def _build_client_sample(self, obs: dict[str, Any]) -> dict[str, Any]:
+    def _build_client_sample(
+        self, obs: dict[str, Any], *, tactile_window: TactileWindow | None = None
+    ) -> dict[str, Any]:
         """Same sample contract as training, built from the client's message."""
         prompt = obs.get("prompt")
         if not isinstance(prompt, str):
@@ -323,6 +375,15 @@ class XHandPolicyService(RobolabPolicyService):
             "proprio": torch.from_numpy(self._client_proprio(obs)),
         }
         sample = self._transform(sample, self.cfg.resolution)
+        if self._tactile_input is not None:
+            if tactile_window is None:
+                reset = (
+                    bool(obs.get("reset_tactile_memory")) or bool(obs.get("cte_reset")) or self._episode_reset_pending
+                )
+                tactile_window = self._tactile_input.prepare(obs, reset=reset)
+            # Attach after the visual transform: preserve raw sensor units and mask.
+            sample["tactile_state"] = tactile_window.state
+            sample["tactile_valid"] = tactile_window.valid
         if isinstance(sample.get("ai_caption"), dict):
             sample["ai_caption"] = json.dumps(sample["ai_caption"])
         return sample
@@ -355,9 +416,7 @@ class XHandPolicyService(RobolabPolicyService):
         if take:
             history[0, -take:] = completed[-take:]
             history_valid[0, -take:] = True
-        global_feature = self._task_context_from_initial_observation(
-            self._last_composite, str(self._last_prompt)
-        )
+        global_feature = self._task_context_from_initial_observation(self._last_composite, str(self._last_prompt))
         return global_feature, encoded["phase"][:, -1].float(), history, history_valid
 
     def _empty_causal_interaction_features(self) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -374,17 +433,17 @@ class XHandPolicyService(RobolabPolicyService):
 
     # -------------------------------------------------------------------- infer
     def infer(self, obs: dict[str, Any]) -> dict[str, Any]:
-        reset = bool(obs.get("reset_tactile_memory")) or bool(obs.get("cte_reset")) or self._episode_reset_pending
-        if reset:
-            self._cte_buffer.reset()
-            self._episode_reset_pending = False
-
-        image = self._compose_client_view(obs)
-        self._last_composite = image
-        self._last_prompt = obs.get("prompt")
-        sample = self._build_client_sample(obs)
-
         with self._lock:
+            reset = bool(obs.get("reset_tactile_memory")) or bool(obs.get("cte_reset")) or self._episode_reset_pending
+            tactile_window = None
+            if self._tactile_input is not None:
+                tactile_window = self._tactile_input.prepare(obs, reset=reset)
+            image = self._compose_client_view(obs)
+            sample = self._build_client_sample(obs, tactile_window=tactile_window)
+            if reset:
+                self._cte_buffer.reset()
+            self._last_composite = image
+            self._last_prompt = obs.get("prompt")
             with torch.inference_mode():
                 if self._zeva_enabled:
                     self._update_cte_buffer(obs, image)
@@ -409,13 +468,16 @@ class XHandPolicyService(RobolabPolicyService):
                     shift=self.cfg.shift,
                 )
 
-        action = samples["action"][0][:, : self.cfg.action_dim]
-        action = action[self.cfg.history_length :]
-        action_np = action.detach().cpu().numpy().astype(np.float32, copy=False)
-        action_np = self._denormalize(action_np)
+            action = samples["action"][0][:, : self.cfg.action_dim]
+            action = action[self.cfg.history_length :]
+            action_np = action.detach().cpu().numpy().astype(np.float32, copy=False)
+            action_np = self._denormalize(action_np)
 
-        if self._zeva_enabled:
-            self._cte_buffer.record_returned_actions(action_np)
+            if self._zeva_enabled:
+                self._cte_buffer.record_returned_actions(action_np)
+            if tactile_window is not None:
+                self._tactile_input.commit(tactile_window)
+            self._episode_reset_pending = False
 
         log.info(
             f"[xhand-policy-server] action shape={action_np.shape} "
@@ -434,7 +496,12 @@ def serve(args: XHandServerArgs) -> None:
     # handing it the bound method fails at request time with
     # "'function' object has no attribute 'infer'". Matches the reference servers
     # (action_policy_server_robolab.py:630, action_policy_server_robocasa365_zeva.py:935).
-    server = server_cls(policy=service, host=args.host, port=int(args.port), metadata={"server": "xhand-zeva"})
+    metadata = {"server": "xhand-zeva", "cte_query_stride": _CTE_STRIDE}
+    if service._tactile_input is not None:
+        metadata.update(
+            tactile_protocol="xhand_dense_v1", tactile_fps=TACTILE_FPS, tactile_memory_steps=TACTILE_MEMORY_STEPS
+        )
+    server = server_cls(policy=service, host=args.host, port=int(args.port), metadata=metadata)
     log.info(f"[xhand-policy-server] listening on {hostname}:{int(args.port)}")
     server.serve_forever()
 

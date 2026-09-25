@@ -1015,6 +1015,10 @@ class PackedSequence:
     # None for non-transfer or standard single-control samples.
     control_weights: list[list[float]] | None = None
 
+    # Current tactile evidence is independent of the completed CTE effect mask.
+    # Attached after packing and gated inside the policy network's FSDP forward.
+    behavior_tactile_effect: torch.Tensor | None = None
+
     def __post_init__(self) -> None:
         self._sequence_pack_metadata: SequencePackMetadata | None = None
         assert isinstance(self.text_ids, torch.Tensor), "PackedSequence.text_ids must be finalized"
@@ -1048,6 +1052,8 @@ class PackedSequence:
             self.ce_loss_indexes = self.ce_loss_indexes.cuda()
         if isinstance(self.ce_loss_weights, torch.Tensor):
             self.ce_loss_weights = self.ce_loss_weights.cuda()
+        if self.behavior_tactile_effect is not None:
+            self.behavior_tactile_effect = self.behavior_tactile_effect.cuda()
         if self.vision is not None:
             self.vision.to_cuda()
         if self.action is not None:

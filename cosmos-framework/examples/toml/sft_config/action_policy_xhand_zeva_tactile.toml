@@ -1,0 +1,46 @@
+# Causal tactile Zeva stage-2 comparison recipe. It shares the baseline's
+# Phase-1 checkpoint, CTE cache, split, and batch settings.
+
+[job]
+task = "vfm"
+experiment = "action_policy_xhand_zeva_tactile"
+project = "zeva"
+group = "zeva_xhand"
+name = "action_policy_xhand_zeva_tactile"
+wandb_mode = "disabled"
+
+[model]
+precision = "bfloat16"
+
+[model.parallelism]
+data_parallel_shard_degree = 8
+data_parallel_replicate_degree = 1
+
+[model.activation_checkpointing]
+mode = "full"
+save_ops_regex = ["fmha"]
+
+[model.tokenizer]
+vae_path = "${oc.env:WAN_VAE_PATH}"
+
+[optimizer]
+lr = 2.0e-4
+
+[scheduler]
+cycle_lengths = [2000]
+
+[dataloader_train]
+max_samples_per_batch = 16
+
+[trainer]
+max_iter = 2000
+logging_iter = 10
+grad_accum_iter = 1
+
+[trainer.callbacks.compile_tokenizer]
+enabled = true
+warmup_resolutions = ["256"]
+
+[checkpoint]
+load_path = "${oc.env:ZEVA_POLICY_CHECKPOINT}"
+save_iter = 500

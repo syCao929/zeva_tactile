@@ -1,0 +1,94 @@
+{
+  "torch_version": "2.10.0+cu128",
+  "device": "cpu",
+  "source_sha256": {
+    "cosmos-framework/cosmos_framework/model/generator/mot/cosmos3_vfm_network.py": "10589288292ac31d5f4f8a562c86507a5d0bd709ea0b23437a59fc91b689d9c6",
+    "cosmos-framework/cosmos_framework/model/generator/omni_mot_model.py": "a39d0ac901f0033abcd17c01c588eb4f269e0dbd6d6279764240af0785b22104",
+    "cosmos-framework/cosmos_framework/model/zeva/policy_injection.py": "6006e3476c84cbcdabb3a92f8a0471f376ea7c36fb75674109ab47e5a946510a"
+  },
+  "initialization": {
+    "tactile_head_parameters_uninitialized": [],
+    "tactile_head_output_finite": [
+      true,
+      true,
+      true
+    ],
+    "tactile_bit_all_parameters_finite": true,
+    "baseline_prior_all_parameters_finite": true,
+    "baseline_layernorms_exact_one_zero": {
+      "phase_query.0": true,
+      "effect_project.0": true,
+      "effect_norm": true,
+      "effect_gate.0": true,
+      "context_norm": true
+    },
+    "baseline_attention_all_parameters_finite": {
+      "effect_attention": true,
+      "progress_attention": true
+    },
+    "baseline_adapter_all_parameters_finite": true,
+    "baseline_global_projector_all_parameters_finite": true
+  },
+  "gradients": [
+    {
+      "last_effect_slot_valid": false,
+      "gate_value": 0.0,
+      "baseline_exact": true,
+      "gate_grad": [
+        -0.0006517632864415646
+      ],
+      "projector_grad_l1": 0.0,
+      "bit_grad_l1": 0.0,
+      "effect_head_grad_l1": 0.0,
+      "phase_head_grad_tensors": 0,
+      "confidence_head_grad_tensors": 0,
+      "encoder_grad_tensors": 0,
+      "phase_gate_has_grad": false
+    },
+    {
+      "last_effect_slot_valid": false,
+      "gate_value": 0.3,
+      "baseline_exact": false,
+      "gate_grad": [
+        0.00017995045345742255
+      ],
+      "projector_grad_l1": 19.490051763132215,
+      "bit_grad_l1": 6.939736224710941,
+      "effect_head_grad_l1": 1.3153616827912629,
+      "phase_head_grad_tensors": 0,
+      "confidence_head_grad_tensors": 0,
+      "encoder_grad_tensors": 0,
+      "phase_gate_has_grad": false
+    },
+    {
+      "last_effect_slot_valid": true,
+      "gate_value": 0.0,
+      "baseline_exact": true,
+      "gate_grad": [
+        1.8065442418446764e-05
+      ],
+      "projector_grad_l1": 0.0,
+      "bit_grad_l1": 0.0,
+      "effect_head_grad_l1": 0.0,
+      "phase_head_grad_tensors": 0,
+      "confidence_head_grad_tensors": 0,
+      "encoder_grad_tensors": 0,
+      "phase_gate_has_grad": false
+    },
+    {
+      "last_effect_slot_valid": true,
+      "gate_value": 0.3,
+      "baseline_exact": false,
+      "gate_grad": [
+        1.796698234102223e-05
+      ],
+      "projector_grad_l1": 0.8400718462653458,
+      "bit_grad_l1": 0.29057396718417294,
+      "effect_head_grad_l1": 0.05322362307924777,
+      "phase_head_grad_tensors": 0,
+      "confidence_head_grad_tensors": 0,
+      "encoder_grad_tensors": 0,
+      "phase_gate_has_grad": false
+    }
+  ]
+}

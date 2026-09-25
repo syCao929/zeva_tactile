@@ -1,0 +1,315 @@
+{
+  "device": "cpu",
+  "forward_dtype": "float32",
+  "checks": {
+    "all_cached_values_finite": true,
+    "all_raw_actions_match_source": true,
+    "all_feature_masks_match_cadence": true,
+    "latent_frames": 11883
+  },
+  "split": {
+    "train_episodes": 96,
+    "val_episodes": [
+      18,
+      21,
+      33,
+      56,
+      59
+    ],
+    "train_windows": 9748,
+    "val_windows": 519,
+    "overlap": []
+  },
+  "cached_features_spaced_16_boundaries": {
+    "phase": {
+      "count": 687,
+      "mean_pairwise_cosine": 0.7784803509712219,
+      "centered_singular_entropy_rank": 68.42675018310547,
+      "mean_dimension_std": 0.04077085480093956
+    },
+    "effect_post": {
+      "count": 687,
+      "mean_pairwise_cosine": 0.009499041363596916,
+      "centered_singular_entropy_rank": 76.24053955078125,
+      "mean_dimension_std": 0.08776019513607025
+    }
+  },
+  "checkpoint": {
+    "config": {
+      "action_dim": 18,
+      "hidden_dim": 256,
+      "retrieval_dim": 128,
+      "phase_dim": 128,
+      "effect_dim": 128,
+      "transition_steps": 4,
+      "effect_window_transitions": 4,
+      "effect_target_grid": [
+        4,
+        6
+      ],
+      "num_layers": 4,
+      "num_heads": 8,
+      "image_channels": 48,
+      "ema_decay": 0.996,
+      "use_mamba": false,
+      "vision_chunk_size": 256,
+      "vision_gradient_checkpointing": true,
+      "vision_checkpoint_threshold": 1024
+    },
+    "step": 3000,
+    "all_weights_match_latest": true,
+    "all_weights_finite": true,
+    "optimizer": [
+      {
+        "lr": 0.0001,
+        "betas": [
+          0.9,
+          0.999
+        ],
+        "eps": 1e-08,
+        "weight_decay": 0.05,
+        "amsgrad": false,
+        "maximize": false,
+        "foreach": null,
+        "capturable": false,
+        "differentiable": false,
+        "fused": null,
+        "decoupled_weight_decay": true
+      }
+    ],
+    "parameter_dtypes": [
+      "torch.float32"
+    ],
+    "optimizer_step_range": [
+      3000.0,
+      3000.0
+    ]
+  },
+  "full_validation_cpu_fp32": {
+    "total": 0.6972474501683161,
+    "action": 0.0050723895573845275,
+    "vision": 0.002078059564631146,
+    "loss_task": 0.0,
+    "loss_phase": 0.0005819710816677588,
+    "loss_effect": 2.760155211962186,
+    "effect_contrastive": 1.6934469351401695,
+    "effect_diversity": 0.3159122978265469,
+    "effect_visual": 0.1544397899737725,
+    "effect_action": 0.011261763180104585,
+    "effect_align": 0.39123745354322287,
+    "effect_variance": 0.5011481651893028,
+    "effect_covariance": 5.24902471281015
+  },
+  "checkpoint_diagnostics": {
+    "500": {
+      "phase": {
+        "count": 34,
+        "mean_pairwise_cosine": 0.5505330562591553,
+        "centered_singular_entropy_rank": 15.909502029418945,
+        "mean_dimension_std": 0.05610833689570427
+      },
+      "effect_post": {
+        "count": 34,
+        "mean_pairwise_cosine": 0.01050585974007845,
+        "centered_singular_entropy_rank": 28.19891357421875,
+        "mean_dimension_std": 0.08643251657485962
+      },
+      "effect_pre": {
+        "count": 34,
+        "mean_pairwise_cosine": 0.03889555111527443,
+        "centered_singular_entropy_rank": 11.644413948059082,
+        "mean_dimension_std": 0.08195802569389343
+      },
+      "effect_delta_target": {
+        "count": 34,
+        "mean_pairwise_cosine": -0.007677797228097916,
+        "centered_singular_entropy_rank": 30.266084671020508,
+        "mean_dimension_std": 0.18947246670722961
+      },
+      "effect_vs_visual_delta_similarity_pearson": 0.6092833876609802
+    },
+    "1000": {
+      "phase": {
+        "count": 34,
+        "mean_pairwise_cosine": 0.6754612922668457,
+        "centered_singular_entropy_rank": 17.074504852294922,
+        "mean_dimension_std": 0.048259880393743515
+      },
+      "effect_post": {
+        "count": 34,
+        "mean_pairwise_cosine": -0.00341787189245224,
+        "centered_singular_entropy_rank": 25.751619338989258,
+        "mean_dimension_std": 0.08693834394216537
+      },
+      "effect_pre": {
+        "count": 34,
+        "mean_pairwise_cosine": 0.019277110695838928,
+        "centered_singular_entropy_rank": 14.871979713439941,
+        "mean_dimension_std": 0.08455624431371689
+      },
+      "effect_delta_target": {
+        "count": 34,
+        "mean_pairwise_cosine": -0.007677797228097916,
+        "centered_singular_entropy_rank": 30.266084671020508,
+        "mean_dimension_std": 0.18947246670722961
+      },
+      "effect_vs_visual_delta_similarity_pearson": 0.6025734543800354
+    },
+    "1500": {
+      "phase": {
+        "count": 34,
+        "mean_pairwise_cosine": 0.7516797184944153,
+        "centered_singular_entropy_rank": 18.63326072692871,
+        "mean_dimension_std": 0.04198571667075157
+      },
+      "effect_post": {
+        "count": 34,
+        "mean_pairwise_cosine": -0.013059815391898155,
+        "centered_singular_entropy_rank": 22.848031997680664,
+        "mean_dimension_std": 0.08757573366165161
+      },
+      "effect_pre": {
+        "count": 34,
+        "mean_pairwise_cosine": 0.0025828424841165543,
+        "centered_singular_entropy_rank": 16.112491607666016,
+        "mean_dimension_std": 0.08554103970527649
+      },
+      "effect_delta_target": {
+        "count": 34,
+        "mean_pairwise_cosine": -0.007677797228097916,
+        "centered_singular_entropy_rank": 30.266084671020508,
+        "mean_dimension_std": 0.18947246670722961
+      },
+      "effect_vs_visual_delta_similarity_pearson": 0.5714818835258484
+    },
+    "2000": {
+      "phase": {
+        "count": 34,
+        "mean_pairwise_cosine": 0.7455081939697266,
+        "centered_singular_entropy_rank": 19.5489559173584,
+        "mean_dimension_std": 0.04258602857589722
+      },
+      "effect_post": {
+        "count": 34,
+        "mean_pairwise_cosine": -0.016158245503902435,
+        "centered_singular_entropy_rank": 22.493022918701172,
+        "mean_dimension_std": 0.08806629478931427
+      },
+      "effect_pre": {
+        "count": 34,
+        "mean_pairwise_cosine": 0.0016313984524458647,
+        "centered_singular_entropy_rank": 16.583078384399414,
+        "mean_dimension_std": 0.08566591888666153
+      },
+      "effect_delta_target": {
+        "count": 34,
+        "mean_pairwise_cosine": -0.007677797228097916,
+        "centered_singular_entropy_rank": 30.266084671020508,
+        "mean_dimension_std": 0.18947246670722961
+      },
+      "effect_vs_visual_delta_similarity_pearson": 0.5562503933906555
+    },
+    "2500": {
+      "phase": {
+        "count": 34,
+        "mean_pairwise_cosine": 0.7425402402877808,
+        "centered_singular_entropy_rank": 20.38602066040039,
+        "mean_dimension_std": 0.04320617392659187
+      },
+      "effect_post": {
+        "count": 34,
+        "mean_pairwise_cosine": -0.017052527517080307,
+        "centered_singular_entropy_rank": 23.15412139892578,
+        "mean_dimension_std": 0.08829747885465622
+      },
+      "effect_pre": {
+        "count": 34,
+        "mean_pairwise_cosine": 0.002359665697440505,
+        "centered_singular_entropy_rank": 17.90686798095703,
+        "mean_dimension_std": 0.08614568412303925
+      },
+      "effect_delta_target": {
+        "count": 34,
+        "mean_pairwise_cosine": -0.007677797228097916,
+        "centered_singular_entropy_rank": 30.266084671020508,
+        "mean_dimension_std": 0.18947246670722961
+      },
+      "effect_vs_visual_delta_similarity_pearson": 0.568916380405426
+    },
+    "3000": {
+      "phase": {
+        "count": 34,
+        "mean_pairwise_cosine": 0.7652809023857117,
+        "centered_singular_entropy_rank": 21.533700942993164,
+        "mean_dimension_std": 0.04143331199884415
+      },
+      "effect_post": {
+        "count": 34,
+        "mean_pairwise_cosine": -0.015672948211431503,
+        "centered_singular_entropy_rank": 23.970115661621094,
+        "mean_dimension_std": 0.08829541504383087
+      },
+      "effect_pre": {
+        "count": 34,
+        "mean_pairwise_cosine": 0.009526312351226807,
+        "centered_singular_entropy_rank": 18.948942184448242,
+        "mean_dimension_std": 0.08618079125881195
+      },
+      "effect_delta_target": {
+        "count": 34,
+        "mean_pairwise_cosine": -0.007677797228097916,
+        "centered_singular_entropy_rank": 30.266084671020508,
+        "mean_dimension_std": 0.18947246670722961
+      },
+      "effect_vs_visual_delta_similarity_pearson": 0.5761174559593201
+    }
+  },
+  "causality_max_abs_difference": {
+    "phase_through_boundary8": 0.0,
+    "next_action_through_boundary8": 0.0,
+    "completed_effects_through_boundary8": 0.0
+  },
+  "recomputed_vs_cached_features": [
+    {
+      "episode": 18,
+      "boundary": 16,
+      "phase_cosine": 0.9999875426292419,
+      "min_effect_cosine": 0.9999567866325378
+    },
+    {
+      "episode": 18,
+      "boundary": 118,
+      "phase_cosine": 0.9999933242797852,
+      "min_effect_cosine": 0.9999181032180786
+    },
+    {
+      "episode": 21,
+      "boundary": 101,
+      "phase_cosine": 0.999993085861206,
+      "min_effect_cosine": 0.9999287128448486
+    },
+    {
+      "episode": 33,
+      "boundary": 84,
+      "phase_cosine": 0.9999922513961792,
+      "min_effect_cosine": 0.9999351501464844
+    },
+    {
+      "episode": 56,
+      "boundary": 84,
+      "phase_cosine": 0.9999926090240479,
+      "min_effect_cosine": 0.999845564365387
+    },
+    {
+      "episode": 59,
+      "boundary": 84,
+      "phase_cosine": 0.9999908208847046,
+      "min_effect_cosine": 0.9999549388885498
+    }
+  ],
+  "multitask_eval_guard_probe": {
+    "grad_enabled_loss": 0.00038623809814453125,
+    "no_grad_loss": 0.0,
+    "affects_current_single_task": false
+  }
+}

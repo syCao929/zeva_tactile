@@ -83,6 +83,13 @@ def parallelize_vfm_network(
     if parallel_dims is not None and parallel_dims.dp_enabled:
         # Collect parameters to ignore during FSDP wrapping
         ignored_params = set()
+        # The external tactile encoder is frozen and receives ordinary batch
+        # tensors before the trainable projector. Keeping its parameters
+        # replicated avoids mixing regular tensors with DTensor weights in the
+        # frozen encoder's small matmuls; the projector/BIT/head remain sharded.
+        tactile = getattr(model, "tactile_encoder_projector", None)
+        if tactile is not None:
+            ignored_params.update(tactile.encoder.parameters())
 
         model = fully_shard(
             module=model,
@@ -115,5 +122,6 @@ def parallelize_vfm_network(
         # registrations cover every FSDP-wrapped weight touched on the
         # AR path.
         register_fsdp_forward_method(model, "generate_reasoner_text")
+        register_fsdp_forward_method(model, "encode_tactile_behavior")
 
     return model

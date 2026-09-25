@@ -1,0 +1,18 @@
+# Dedicated Python 3.11 environment; do not install into envs/zeva.
+torch==2.7.1
+torchvision==0.22.1
+transformers==4.53.2
+numpy>=1.26,<2
+safetensors>=0.5,<1
+sentencepiece>=0.2,<1
+einops>=0.8,<1
+jax==0.5.3
+flax==0.10.2
+orbax-checkpoint==0.11.13
+jaxtyping==0.2.36
+beartype==0.19.0
+augmax==0.3.4
+typing-extensions>=4.12
+pyarrow>=17,<22
+av>=14,<16
+pytest>=8,<10

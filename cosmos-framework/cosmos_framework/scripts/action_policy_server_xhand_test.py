@@ -12,11 +12,11 @@ against a hand-computed expectation rather than against the implementation.
 from __future__ import annotations
 
 import numpy as np
+import pytest
 import torch
 
 from cosmos_framework.data.generator.action.datasets.xhand_lerobot_dataset import _STATE_INDICES
 from cosmos_framework.scripts.action_policy_server_xhand import _PROPRIO_INDICES, _BoundaryBuffer
-
 
 STRIDE = 4
 ACTION_DIM = 18
@@ -143,7 +143,27 @@ def test_proprio_indices_match_training() -> None:
     If these drift apart the policy silently receives the wrong conditioning
     channels — no shape error, just a quietly worse policy.
     """
-    assert tuple(_PROPRIO_INDICES) == _STATE_INDICES["arm22"]
+    assert tuple(_PROPRIO_INDICES) == _STATE_INDICES["joint18"]
+
+
+def test_proprio_covers_the_action_space() -> None:
+    """Proprio must describe the joints the policy is commanding.
+
+    Both reference implementations hold to this: pi0/pi0.5 build `state_proj` as
+    `Linear(action_dim, width)` (openpi pi0.py:159), and Zeva's proprio is its
+    action's DOF set (end-effector + gripper) in absolute form.
+
+    The XHand policy observes all 18 arm and hand joint positions it commands.
+    """
+    from cosmos_framework.data.generator.action.datasets.xhand_lerobot_dataset import (
+        _ACTION_INDICES,
+        _HAND_POS,
+    )
+
+    assert tuple(_PROPRIO_INDICES) == tuple(range(6)) + _HAND_POS
+    assert len(_PROPRIO_INDICES) == len(_ACTION_INDICES["full18"]) == 18
+    # The hand half must be the position lanes, not the interleaved torque lanes.
+    assert set(_HAND_POS).isdisjoint(range(29, 52, 2))
 
 
 def test_composite_geometry_matches_training_loader() -> None:
@@ -181,3 +201,187 @@ def test_window_is_bounded() -> None:
     # Frames kept are the newest ones; transitions still trail by one.
     assert torch.all(latents[0, -1] == 9.0)
     np.testing.assert_allclose(transitions[0, -1], _chunk(8)[:STRIDE])
+
+
+def _tactile_request(history, frame: int, *, start: int = 0) -> dict:
+    for index in range(start, frame + 1):
+        state = np.full(1972, float(index), dtype=np.float32)
+        history.append(index, state)
+    return {
+        **history.packet(frame),
+        "observation/state": np.full(1972, float(frame), dtype=np.float32),
+        "prompt": "Press the button four times.",
+    }
+
+
+def _cpu_tactile_service():
+    import threading
+    from types import SimpleNamespace
+
+    from cosmos_framework.scripts.action_policy_server_xhand import XHandPolicyService
+
+    service = XHandPolicyService.__new__(XHandPolicyService)
+    service.cfg = SimpleNamespace(
+        action_chunk_size=32,
+        action_dim=18,
+        conditioning_fps=15,
+        domain_name="ur7e-xhand",
+        resolution="256",
+        history_length=0,
+        guidance=1.0,
+        num_steps=1,
+        shift=1.0,
+    )
+    service.model = SimpleNamespace(
+        config=SimpleNamespace(
+            behavior_stage2=SimpleNamespace(tactile_enabled=True, tactile_memory_steps=30),
+        )
+    )
+    service._zeva_enabled = True
+    service._init_tactile_input()
+    service._episode_reset_pending = True
+    service._compose_client_view = lambda obs: np.zeros((2, 4, 3), dtype=np.uint8)
+    service._transform = lambda sample, resolution: dict(sample)
+    service._lock = threading.Lock()
+    service._cte_buffer = _BoundaryBuffer(stride=4, action_dim=18, max_frames=17)
+    service._update_cte_buffer = lambda obs, image: service._cte_buffer.observe(torch.zeros(1, 2, 2))
+    service._causal_interaction_features_from_buffer = lambda: (
+        torch.zeros(1, 256),
+        torch.zeros(1, 128),
+        torch.zeros(1, 4, 128),
+        torch.zeros(1, 4, dtype=torch.bool),
+    )
+    service.xargs = SimpleNamespace(require_cte_history=False)
+    service._next_seed = lambda: 0
+    service._denormalize = lambda action: action
+    service.observed_batches = []
+
+    def generate(data_batch, **kwargs):
+        service.observed_batches.append(data_batch)
+        return {"action": [torch.zeros(32, 18)]}
+
+    service.model.generate_samples_from_batch = generate
+    return service
+
+
+def test_tactile_inference_preserves_dense_frames_between_cte_queries_and_resets() -> None:
+    from cosmos_framework.inference.xhand_tactile_client import TactileClientWindow
+
+    service = _cpu_tactile_service()
+    history = TactileClientWindow("attempt-1")
+    first = _tactile_request(history, 0)
+    assert service.infer(first)["actions"].shape == (32, 18)
+    second = _tactile_request(history, 4, start=1)
+    service.infer(second)
+    batch = service.observed_batches[-1]
+    assert batch["tactile_state"][0].shape == (1, 30, 1972)
+    assert batch["tactile_valid"][0].shape == (1, 30)
+    assert batch["tactile_valid"][0].sum() == 5
+    torch.testing.assert_close(batch["tactile_state"][0][0, -5:, 0], torch.arange(5, dtype=torch.float32))
+    assert service._cte_buffer.num_frames == 2
+
+    history.reset("attempt-2")
+    service.infer(_tactile_request(history, 0))
+    assert service._cte_buffer.num_frames == 1
+    assert service.observed_batches[-1]["tactile_valid"][0].sum() == 1
+    assert torch.count_nonzero(service.observed_batches[-1]["tactile_state"][0]) == 0
+
+
+def test_tactile_window_rejects_sparse_query_samples() -> None:
+    from cosmos_framework.inference.xhand_tactile import XHandTactileInput
+    from cosmos_framework.inference.xhand_tactile_client import TactileClientWindow
+
+    request = _tactile_request(TactileClientWindow(), 4)
+    request["tactile_valid"][-4:-1] = False
+    request["tactile_frame_indices"][-4:-1] = -1
+    with pytest.raises(ValueError, match="every available 15 Hz frame"):
+        XHandTactileInput().prepare(request, reset=True)
+
+
+@pytest.mark.parametrize("field", ["tactile_state", "tactile_valid", "tactile_frame_indices", "tactile_fps"])
+def test_tactile_window_requires_explicit_sensor_history(field) -> None:
+    from cosmos_framework.inference.xhand_tactile import XHandTactileInput
+    from cosmos_framework.inference.xhand_tactile_client import TactileClientWindow
+
+    request = _tactile_request(TactileClientWindow(), 0)
+    del request[field]
+    with pytest.raises(ValueError, match="missing"):
+        XHandTactileInput().prepare(request, reset=True)
+
+
+@pytest.mark.parametrize("problem", ["nan", "current", "fps", "indices", "mask", "future"])
+def test_tactile_window_rejects_invalid_observations(problem) -> None:
+    from cosmos_framework.inference.xhand_tactile import XHandTactileInput
+    from cosmos_framework.inference.xhand_tactile_client import TactileClientWindow
+
+    request = _tactile_request(TactileClientWindow(), 4)
+    if problem == "nan":
+        request["tactile_state"][-2, 52] = np.nan
+    elif problem == "current":
+        request["observation/state"][100] += 1
+    elif problem == "fps":
+        request["tactile_fps"] = 15 / 4
+    elif problem == "indices":
+        request["tactile_frame_indices"][-2] = 0
+    elif problem == "mask":
+        request["tactile_valid"] = request["tactile_valid"].astype(np.int64)
+    else:
+        request["tactile_frame_indices"][-1] = 5
+    with pytest.raises(ValueError):
+        XHandTactileInput().prepare(request, reset=True)
+
+
+def test_tactile_window_cadence_episode_identity_and_reconnect() -> None:
+    from cosmos_framework.inference.xhand_tactile import XHandTactileInput
+    from cosmos_framework.inference.xhand_tactile_client import TactileClientWindow
+
+    adapter = XHandTactileInput()
+    history = TactileClientWindow("attempt-1")
+    adapter.commit(adapter.prepare(_tactile_request(history, 0), reset=True))
+    wrong_cadence = _tactile_request(history, 8, start=1)
+    with pytest.raises(ValueError, match="exactly 4"):
+        adapter.prepare(wrong_cadence, reset=False)
+    reconnected = adapter.prepare(wrong_cadence, reset=True)
+    assert reconnected.valid.sum() == 9
+    adapter.commit(reconnected)
+    new_attempt = _tactile_request(TactileClientWindow("attempt-2"), 0)
+    with pytest.raises(ValueError, match="new episode"):
+        adapter.prepare(new_attempt, reset=False)
+    # Old history must not survive a new attempt's frame-zero request.
+    new_attempt["tactile_state"] = wrong_cadence["tactile_state"]
+    new_attempt["tactile_valid"] = wrong_cadence["tactile_valid"]
+    new_attempt["tactile_frame_indices"] = wrong_cadence["tactile_frame_indices"]
+    with pytest.raises(ValueError, match="every available"):
+        adapter.prepare(new_attempt, reset=True)
+
+
+def test_tactile_short_window_is_left_padded_and_long_window_keeps_last_30() -> None:
+    from cosmos_framework.inference.xhand_tactile import XHandTactileInput
+    from cosmos_framework.inference.xhand_tactile_client import TactileClientWindow
+
+    request = _tactile_request(TactileClientWindow(), 0)
+    for key in ("tactile_state", "tactile_valid", "tactile_frame_indices"):
+        request[key] = request[key][-1:]
+    padded = XHandTactileInput().prepare(request, reset=True)
+    assert padded.state.shape == (30, 1972)
+    assert padded.valid.sum() == 1
+    request = _tactile_request(TactileClientWindow(), 36)
+    window = XHandTactileInput().prepare(request, reset=True)
+    torch.testing.assert_close(window.state[:, 0], torch.arange(7, 37, dtype=torch.float32))
+
+
+def test_tactile_serving_is_enabled_only_by_the_loaded_model_config() -> None:
+    service = _cpu_tactile_service()
+    service.model.config.behavior_stage2.tactile_enabled = False
+    service._init_tactile_input()
+    assert service._tactile_input is None
+    assert "tactile_state" not in service._build_client_sample(
+        {
+            "prompt": "Press the button",
+            "observation/state": np.zeros(1972, dtype=np.float32),
+        }
+    )
+    service.model.config.behavior_stage2.tactile_enabled = True
+    service.cfg.conditioning_fps = 20
+    with pytest.raises(ValueError, match="15 Hz"):
+        service._init_tactile_input()

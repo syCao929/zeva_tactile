@@ -1,0 +1,20 @@
+{
+  "real_encoder_and_parquet": true,
+  "real_cte_v4": true,
+  "pi0_backbone": "synthetic CPU fixture",
+  "frames": [
+    0,
+    40
+  ],
+  "tactile_valid_counts": [
+    1,
+    30
+  ],
+  "losses": {
+    "loss": 3.667304277420044,
+    "action_flow_loss": 3.6228549480438232,
+    "prior_nll": 4.444927215576172
+  },
+  "tactile_gate_gradient": 2.541482353990432e-05,
+  "encoder_and_backbone_frozen": true
+}

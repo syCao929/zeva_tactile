@@ -13,6 +13,11 @@ Zeva 让策略记住"之前几次尝试里我的动作造成了什么后果"，�
 | 硬件 | 1 节点 8×A800-80G |
 | 基座 | `nvidia/Cosmos3-Nano`（30 GB DCP）+ Qwen3-VL-8B + Wan2.2 VAE |
 
+> **2026-09-25 Cosmos 当前入口：**基础策略使用 `v3-joint18-20260925`（18 维臂/手关节 proprio）。
+> V2 策略及其派生 Stage-2 已退役；新的 Cosmos baseline / 触觉 Stage-2 均须从选定的已保存 V3 检查点训练。
+> CTE v4、对应缓存与 task-context bank 继续共享，具体状态见第 9 节。
+> 新增的 **π0 基座、Zeva 和触觉对照版本**见 [PI0_ZEVA.md](PI0_ZEVA.md)。该入口使用独立环境和 π0 权重，本轮完成代码与CPU验证，尚未启动正式训练。
+>
 > **本仓库只包含复现所需的改动**，不含 Cosmos Framework 上游代码之外的第三方资源。
 > 2026-09-21 之前的详细排障记录（权重校验、网络限制、逐个 bug 的定位过程）
 > 存档在 [`NOTES_archive_20260921.md`](NOTES_archive_20260921.md)。
@@ -61,8 +66,8 @@ bash tools/verify-env.sh                 # 环境自检（A 档不需要权重�
 python tools/convert_xhand_dataset.py    # 数据 → 训练布局（零拷贝，只建软链）
 
 # 三个阶段，每个都有自己的启动脚本，可独立停止
-tools/run-xhand-train.sh   start v1-<日期>       # ① 基础策略      见第 3 节
-tools/run-cte-train.sh     start cte-v1-<日期>   # ② CTE           见第 4 节
+tools/run-xhand-train.sh   start v3-joint18-YYYYMMDD       # ① 基础策略      见第 3 节
+CTE_CACHE="$ZEVA_WORK/datasets/xhand_cte_cache_v2" tools/run-cte-train.sh start cte-YYYYMMDD   # ② CTE           见第 4 节
 # ③ 特征缓存 + 注入训练                          见第 5 节
 
 # 部署
@@ -208,12 +213,12 @@ datasets/press_button_4_times_merged_filtered/
 |---|---|---|
 | embodiment | `ur7e_xhand` | `ur7e-xhand`（domain_id 23）|
 | action | `[18]` 关节位置 | `full18`（6 臂 + 12 手）|
-| state | `[1972]` | `arm22`（臂关节 + ee pose）|
+| state | `[1972]` | `joint18`（6 臂关节 + 12 手关节位置，与动作顺序一致）|
 | 相机 | `cam_left` / `cam_front` | left / **wrist**（源无腕部相机，前视按约定充当）|
 | fps | 15 | 15（非加载器默认的 20，必须显式传）|
 
-> **触觉未使用**。`observation.state[52:1972]` 是 1920 维触觉（534 通道活跃），
-> 但不在任何 state mode 里——见 [9. 现状与局限](#9-现状与局限)。
+> `joint18` 是 proprio 输入。触觉版另取原始 state 的连续 30 帧窗口，经冻结 encoder 和 BIT 注入策略；
+> baseline 不启用该分支。触觉部署协议见 [触觉服务文档](cosmos-framework/docs/xhand_tactile_serving.md)。
 
 ---
 
@@ -284,7 +289,7 @@ Zeva 由三个训练阶段组成，产物逐级依赖：
 
 ```bash
 cd $ZEVA_WORK
-tools/run-xhand-train.sh start v1-20260921
+tools/run-xhand-train.sh start v3-joint18-20260925
 ```
 
 **run 名同时决定检查点和日志的位置**，**同名 = 续训，换名 = 新开一个 run**：
@@ -307,8 +312,8 @@ tools/run-xhand-train.sh rm <名>        # 删除（二次确认）
 ### 可调参数
 
 ```bash
-MAX_ITER=20000 SAVE_ITER=1000 tools/run-xhand-train.sh start v1-20260921
-EXTRA_OVERRIDES="optimizer.lr=1e-4" tools/run-xhand-train.sh start v1-20260921
+MAX_ITER=20000 SAVE_ITER=1000 tools/run-xhand-train.sh start v3-joint18-20260925
+EXTRA_OVERRIDES="optimizer.lr=1e-4" tools/run-xhand-train.sh start v3-joint18-20260925
 ```
 
 | 变量 | 默认 | 说明 |
@@ -351,7 +356,7 @@ stage2_loss_components: flow_matching_loss_vision=0.038, flow_matching_loss_acti
 source env.sh && cd cosmos-framework
 PYTHONPATH=. python -m cosmos_framework.zeva_training.vae_cache \
   --vae-path "$WAN_VAE_PATH" --dataset-root "$XHAND_DATA_ROOT" \
-  --output "$ZEVA_WORK/datasets/xhand_cte_cache"
+  --output "$ZEVA_WORK/datasets/xhand_cte_cache_v2"
 ```
 
 101 episodes → 11,883 latent 帧，608 MB，约 30 分钟。**可断点续跑**，已编码的会跳过。
@@ -363,7 +368,7 @@ PYTHONPATH=. python -m cosmos_framework.zeva_training.vae_cache \
 
 ```bash
 cd $ZEVA_WORK
-tools/run-cte-train.sh start cte-v3-20260922     # 同名即续训
+CTE_CACHE="$ZEVA_WORK/datasets/xhand_cte_cache_v2" tools/run-cte-train.sh start cte-v4-20260924     # 同名即续训
 ```
 
 产物：
@@ -378,7 +383,7 @@ logs/<run名>.log
 
 ```bash
 STEPS=3000 SAVE_EVERY=500 CTE_EXTRA="--effect-diversity-weight 1" \
-  tools/run-cte-train.sh start cte-v3-20260922
+  CTE_CACHE="$ZEVA_WORK/datasets/xhand_cte_cache_v2" tools/run-cte-train.sh start cte-v4-20260924
 ```
 
 | 变量 | 默认 | 说明 |
@@ -395,7 +400,7 @@ STEPS=3000 SAVE_EVERY=500 CTE_EXTRA="--effect-diversity-weight 1" \
 
 ```bash
 STEPS=3000 CTE_EXTRA="--effect-diversity-weight 1" \
-  tools/run-cte-train.sh start cte-v3-20260922
+  CTE_CACHE="$ZEVA_WORK/datasets/xhand_cte_cache_v2" tools/run-cte-train.sh start cte-v4-20260924
 ```
 
 | 参数 | 默认 | 说明 |
@@ -426,12 +431,15 @@ loss weights: effect_contrastive_weight=1  effect_diversity_weight=1  effect_var
 
 ### 5.1 CTE 特征缓存
 
+当前共享资源是 CTE v4 @3000 和 `xhand_cte_features_v4`。`xhand_cte_cache_v2` 是其 VAE latent 缓存，
+名称中的 v2 与已退役的 V2 策略无关；这些共享资源继续保留，已有完整缓存时无需重复生成。
+
 ```bash
 cd $ZEVA_WORK/cosmos-framework && source $ZEVA_WORK/env.sh
 PYTHONPATH=. python -m cosmos_framework.zeva_training.cte_features \
-  --cte-checkpoint "$ZEVA_WORK/runs/zeva_cte/cte-v3-20260922/cte_step_002000.pt" \
-  --latent-cache   "$ZEVA_WORK/datasets/xhand_cte_cache" \
-  --output         "$ZEVA_WORK/datasets/xhand_cte_features_v3"
+  --cte-checkpoint "$ZEVA_WORK/runs/zeva_cte/cte-v4-20260924/cte_step_003000.pt" \
+  --latent-cache   "$ZEVA_WORK/datasets/xhand_cte_cache_v2" \
+  --output         "$ZEVA_WORK/datasets/xhand_cte_features_v4"
 ```
 
 约 2.5 分钟，产物 5.5 MB。每个 boundary（每 4 个原始控制步）存一行 `phase[128]` +
@@ -441,7 +449,7 @@ PYTHONPATH=. python -m cosmos_framework.zeva_training.cte_features \
 
 ```bash
 PYTHONPATH=. python -m cosmos_framework.zeva_training.build_task_context_bank \
-  --feature-cache "$ZEVA_WORK/datasets/xhand_cte_features_v3" \
+  --feature-cache "$ZEVA_WORK/datasets/xhand_cte_features_v4" \
   --output        "$ZEVA_WORK/datasets/xhand_task_context_bank.pt" --check
 ```
 
@@ -450,10 +458,17 @@ PYTHONPATH=. python -m cosmos_framework.zeva_training.build_task_context_bank \
 
 ### 5.3 注入训练
 
+新的 baseline 和触觉 Stage-2 尚待从同一份选定的 V3 检查点训练。先查看
+`runs/zeva/action_xhand/v3-joint18-20260925/checkpoints/`，把 `V3_POLICY_CHECKPOINT`
+设为其中实际保存完整的 `iter_XXXXXXXX` 目录；不要假定存在 4000 步检查点。
+以下是 baseline 的启动命令；触觉版使用对应 tactile recipe，保持基座、CTE、数据和 seed 一致。
+
 ```bash
 cd $ZEVA_WORK
-STAGE2_POLICY_CHECKPOINT="$ZEVA_WORK/runs/zeva/action_xhand/v1-20260921/checkpoints/iter_000004000" \
-ZEVA_FEATURE_CACHE="$ZEVA_WORK/datasets/xhand_cte_features_v3" \
+: "${V3_POLICY_CHECKPOINT:?请先选择已保存的 v3-joint18 检查点目录}"
+test -f "$V3_POLICY_CHECKPOINT/model/.metadata" || exit 1
+STAGE2_POLICY_CHECKPOINT="$V3_POLICY_CHECKPOINT" \
+ZEVA_FEATURE_CACHE="$ZEVA_WORK/datasets/xhand_cte_features_v4" \
   tools/run-xhand-zeva-train.sh start
 ```
 
@@ -481,35 +496,40 @@ behavior_prior_nll = 2.203 → 1.008 → … → 0.906    (iter 0→10)
 ## 6. 部署
 
 服务端是 `cosmos_framework.scripts.action_policy_server_xhand`，走 openpi 的
-websocket + msgpack 协议，**TactileTTT 现有客户端零代码改动可对接**。
+websocket + msgpack 协议。V3 基座需要正确的 18 维 proprio；Stage-2 需要连续控制动作与 CTE 历史一致，
+触觉版还要求每个控制帧的触觉窗口。客户端适配与检查命令见
+[触觉服务文档](cosmos-framework/docs/xhand_tactile_serving.md)。
 
-### 6.1 方式一：纯 VLA 基础策略
+### 6.1 方式一：VLA 基础策略
 
-不需要任何 Zeva 产物，用阶段一的检查点即可。
+使用阶段一 V3 joint18 检查点，输入包含视觉和 proprio。先按第 5.3 节设置 `V3_POLICY_CHECKPOINT`。
 
 ```bash
 cd $ZEVA_WORK/cosmos-framework && source $ZEVA_WORK/env.sh
 CUDA_VISIBLE_DEVICES=0 PYTHONPATH=. $ZEVA_WORK/envs/zeva/bin/python \
   -m cosmos_framework.scripts.action_policy_server_xhand \
-  --checkpoint-path "$ZEVA_WORK/runs/zeva/action_xhand/v1-20260921/checkpoints/iter_000004000" \
+  --checkpoint-path "${V3_POLICY_CHECKPOINT:?请先选择已保存的 v3-joint18 检查点目录}" \
   --allow-dcp-checkpoint \
   --experiment action_policy_xhand_nano \
   --experiment-overrides "model.config.tokenizer.vae_path=$WAN_VAE_PATH" \
   --action-stats-path "$XHAND_ACTION_STATS_PATH" \
   --domain-name ur7e-xhand \
-  --resolution 256 --action-dim 18 --conditioning-fps 15 --proprio-dim 22 \
-  --image-height 256 --image-width 512 --action-chunk-size 32 \
+  --resolution 256 --action-dim 18 --conditioning-fps 15 --proprio-dim 18 \
+  --image-height 256 --image-width 512 --action-chunk-size 32 --history-length 0 \
   --num-steps 30 --guidance 3.0 --shift 5.0 \
   --host 0.0.0.0 --port 8990
 ```
 
-### 6.2 方式二：完整 Zeva（CTE + bank + stage2）
+### 6.2 方式二：Zeva（CTE + bank + Stage-2）
+
+**先完成新的 V3 Stage-2 训练，再设置 `V3_STAGE2_CHECKPOINT` 为其实际保存的检查点。**
+当前没有在此文档中指定已可部署的 V3 Stage-2 产物；基础策略检查点不能代替它。
 
 ```bash
 cd $ZEVA_WORK/cosmos-framework && source $ZEVA_WORK/env.sh
 CUDA_VISIBLE_DEVICES=0 PYTHONPATH=. $ZEVA_WORK/envs/zeva/bin/python \
   -m cosmos_framework.scripts.action_policy_server_xhand \
-  --checkpoint-path "$ZEVA_WORK/runs/zeva/zeva_xhand/action_policy_xhand_zeva/checkpoints/iter_000002000" \
+  --checkpoint-path "${V3_STAGE2_CHECKPOINT:?请先训练并选择 V3 Stage-2 检查点}" \
   --allow-dcp-checkpoint \
   --experiment action_policy_xhand_zeva \
   --experiment-overrides \
@@ -517,10 +537,10 @@ CUDA_VISIBLE_DEVICES=0 PYTHONPATH=. $ZEVA_WORK/envs/zeva/bin/python \
       "model.config.vlm_config.tokenizer.pretrained_model_name=$ZEVA_WORK/models/Qwen3-VL-8B-Instruct" \
   --action-stats-path "$XHAND_ACTION_STATS_PATH" \
   --domain-name ur7e-xhand \
-  --resolution 256 --action-dim 18 --conditioning-fps 15 --proprio-dim 22 \
-  --image-height 256 --image-width 512 --action-chunk-size 32 --history-length 1 \
+  --resolution 256 --action-dim 18 --conditioning-fps 15 --proprio-dim 18 \
+  --image-height 256 --image-width 512 --action-chunk-size 32 --history-length 0 \
   --num-steps 30 --guidance 3.0 --shift 5.0 \
-  --cte-checkpoint "$ZEVA_WORK/runs/zeva_cte/cte-v3-20260922/cte_step_002000.pt" \
+  --cte-checkpoint "$ZEVA_WORK/runs/zeva_cte/cte-v4-20260924/cte_step_003000.pt" \
   --task-context-bank "$ZEVA_WORK/datasets/xhand_task_context_bank.pt" \
   --task-context-instruction PressButton4Times \
   --host 0.0.0.0 --port 8990
@@ -546,8 +566,7 @@ Zeva 的核心主张是"跨尝试的因果记忆有效"。验证它只需在同�
 | `--bit-mode zero` | effect 历史清零，但保留时间可用性（掩码不变）|
 | `--bit-mode shuffled` | 反转已完成的 effect 槽位，保留右对齐的因果位置 |
 
-**PIM（跨尝试记忆）的开关尚未实现**——`behavior_pim_*` 模块本身在 release 里存在，
-但训练与部署链路都还没接（见 9）。
+当前 V3 触觉方案只启用 attempt 内 BIT；PIM（跨尝试记忆）不计入这轮已完成的训练与部署链路（见 9）。
 
 > ⚠️ `--bit-mode` 和服务端的 `disable_policy_injection` 都是**诊断用途**，
 > 不要用在正式跑批里。
@@ -559,22 +578,22 @@ Zeva 的核心主张是"跨尝试的因果记忆有效"。验证它只需在同�
 ```bash
 cd $ZEVA_WORK/cosmos-framework && source $ZEVA_WORK/env.sh
 CUDA_VISIBLE_DEVICES=0 PYTHONPATH=. python -m cosmos_framework.zeva_training.verify_serving \
-  --checkpoint "$ZEVA_WORK/runs/zeva/zeva_xhand/action_policy_xhand_zeva/checkpoints/iter_000002000" \
-  --cte-checkpoint "$ZEVA_WORK/runs/zeva_cte/cte-v3-20260922/cte_step_002000.pt" \
+  --checkpoint "${V3_STAGE2_CHECKPOINT:?请先训练并选择 V3 Stage-2 检查点}" \
+  --cte-checkpoint "$ZEVA_WORK/runs/zeva_cte/cte-v4-20260924/cte_step_003000.pt" \
   --task-context-bank "$ZEVA_WORK/datasets/xhand_task_context_bank.pt" \
   --task-context-instruction PressButton4Times
 ```
 
-期望输出：
+新 V3 Stage-2 部署后应检查的输出形状（不是已完成的验证记录）：
 
 ```
 server ready
-  request 0: actions (31, 18) range [-2.915, +3.005]
+  request 0: actions (32, 18)
   ...
 boundary_frames per request: [1, 2, 3, 4, 5, 6]
-action shapes:               [(31, 18) × 6]
+action shapes:               [(32, 18) × 6]
 
-✅ 服务端加载 stage2 检查点、协议返回 (31, 18)、CTE 路径活跃
+服务端加载所选 V3 Stage-2、协议返回 (32, 18)、CTE 路径活跃
 ```
 
 **`boundary_frames` 递增这一条最关键**：服务端在边界缓冲建不起来时会**静默回退**
@@ -616,7 +635,7 @@ action shapes:               [(31, 18) × 6]
 ```bash
 # 阶段一/三：透传任意 Hydra 覆盖
 EXTRA_OVERRIDES="optimizer.lr=1e-4 dataloader_train.max_samples_per_batch=8" \
-  tools/run-xhand-train.sh start v1-20260921
+  tools/run-xhand-train.sh start v3-joint18-20260925
 
 # 阶段一：NFS 上 num_workers 别超过 4（见 8.1）
 EXTRA_OVERRIDES="dataloader_train.dataloader.num_workers=8" ...
@@ -626,7 +645,7 @@ ZEVA_TAIL_OVERRIDES="trainer.max_iter=5 checkpoint.save_iter=5" \
   bash examples/launch_sft_action_policy_xhand_zeva.sh
 
 # 阶段二：损失权重（默认全为原值；diversity 建议开成 1，见 8.5）
-CTE_EXTRA="--effect-diversity-weight 1" tools/run-cte-train.sh start cte-v3-20260922
+CTE_EXTRA="--effect-diversity-weight 1" CTE_CACHE="$ZEVA_WORK/datasets/xhand_cte_cache_v2" tools/run-cte-train.sh start cte-v4-20260924
 ```
 
 > **特别注意各阶段的开关传法不一样**：阶段一/三是 `EXTRA_OVERRIDES`（Hydra 覆盖），
@@ -737,48 +756,38 @@ CTE_EXTRA="--effect-diversity-weight 1"
 
 ### 各阶段状态
 
-**当前推荐使用的是 v3 那条链**（CTE 带 [8.5](#85-effect_post-方向坍缩已修) 的修复）：
+截至 2026-09-25 本次文件核验，正式策略入口是 **V3 joint18**。运行状态以进程和最新日志为准；
+下表只列已核实保存的资源，不把启动记录当作训练完成。
 
 | 阶段 | 状态 | 产物 |
 |---|---|---|
-| 一：策略微调 | iter 4136 | `runs/zeva/action_xhand/v1-20260921/checkpoints/iter_000004000` |
-| 二：CTE | ✅ v3，2000 步 | `runs/zeva_cte/cte-v3-20260922/cte_step_002000.pt` |
-| 三：特征缓存 | 101 episodes / 11,883 boundary | `datasets/xhand_cte_features_v3/` |
-| 三：bank | 1 entry | `datasets/xhand_task_context_bank.pt` |
-| 三：注入训练 | ✅ v3，2000 步 | `runs/zeva/zeva_xhand/action_policy_xhand_zeva/checkpoints/iter_000002000` |
-| 部署 | ✅ 已验证 | 见 [6.4](#64-部署前验证) |
+| 一：策略微调 | V3，18 维 proprio；核验时最新已保存 iter 2500 | `runs/zeva/action_xhand/v3-joint18-20260925/checkpoints/` |
+| 二：CTE | v4，3000 步；共享保留 | `runs/zeva_cte/cte-v4-20260924/cte_step_003000.pt` |
+| 二：VAE latent 缓存 | 共享保留，与策略 V2 无关 | `datasets/xhand_cte_cache_v2/` |
+| 三：CTE 特征缓存 | 101 episodes / 11,883 boundary；共享保留 | `datasets/xhand_cte_features_v4/` |
+| 三：bank | 1 entry；共享保留 | `datasets/xhand_task_context_bank.pt` |
+| 三：baseline / 触觉注入训练 | 待从同一个选定 V3 检查点训练 | 尚未指定新的可部署检查点 |
+| 部署 | 触觉链路已做 CPU 语义与协议检查；新的 V3 Stage-2 待训练及部署验证 | [触觉服务文档](cosmos-framework/docs/xhand_tactile_serving.md) |
 
-旧的那条链（CTE 无 diversity 修复，`effect_post` 余弦 0.837）保留作对照：
+V2 策略及其派生 Stage-2 已退役，不再用于训练起点、对照或部署。
+早期 V1、旧 CTE 实验的数字只作为历史记录；第 8 节的 CTE v2/v3 消融结果不是当前策略版本状态。
 
-| 阶段 | 产物 |
+### 尚待验证
+
+| 项目 | 状态 |
 |---|---|
-| 二：CTE（旧） | `runs/zeva_cte/cte-v2-20260921/cte_step_003000.pt` |
-| 三：特征缓存（旧） | `datasets/xhand_cte_features/` |
-| 三：注入训练（旧，到 iter 1160） | `runs/zeva/zeva_xhand/action_policy_xhand_zeva-v2-20260921/checkpoints/iter_000001000` |
+| 新 baseline / 触觉对照 | 需在同一 V3 基座上训练，再比较实机表现 |
+| PIM（跨尝试记忆） | 当前触觉方案只使用 attempt 内 BIT；不将 PIM 计入已完成的触觉链路 |
+| stage3 检索头 | 单任务下不作为当前训练步骤 |
+| 触觉部署 | CPU 测试通过不代表八卡训练或机器人测试完成 |
 
-### 尚未实现
+### 当前触觉与 proprio 输入
 
-| 东西 | 说明 |
-|---|---|
-| **PIM（跨尝试记忆）** | Zeva 的核心主张——从之前几次 attempt 检索 phase/effect 合成 Causal Prompt。模块在 release 里存在（`CausalPromptEncoder` / `behavior_pim_*`），但训练与部署链路都没接 |
-| **stage3 检索头** | 单任务下无意义；多任务时需要训 |
-| **触觉模态** | 见下 |
-
-### 触觉完全未被使用
-
-源数据 `observation.state[52:1972]` 是 1920 维触觉，其中 **534 个通道是活跃的**
-（时间 std > 0.1，中位数 0.774）。但它：
-
-1. 不在 `_STATE_INDICES` 的任何 state mode 里（最宽的 `full52` 只到 52）
-2. 而且整条 **proprio 路径都是关的**（`proprio_condition.enabled = False`）
-3. 相机只用了 `cam_left` + `cam_front`，`cam_right` 和三路深度也没用
-
-所以当前策略实质上是**纯 video → action**。
-
-这也部分解释了 8.5 的 `effect_post` 坍缩：Zeva 把"因果后果"定义为
-**视觉差分**（`effect_delta_target` 是冻结 VAE 对 latent 的差分投影），
-而对 `press_button_4_times` 这种接触密集型任务，纯视觉的"后果"高度雷同。
-触觉是更直接的测量。
+基础策略与触觉版都使用 `joint18` proprio（6 臂关节 + 12 手关节位置）。触觉版另输入
+当前时刻及过去的 30 帧原始 state，15 Hz；episode 开头左补零并提供有效掩码。
+冻结的逐帧 encoder 输出经 projector、BIT 和 effect head 注入策略，历史只由 BIT 建模。
+注入在视觉 effect 的 BOS 替换之后执行：零 gate 保持 baseline 等价，开始接触时也能学习。
+phase/confidence 分支保留检查点兼容但冻结，目前不承担训练目标。
 
 ### 单任务的限制
 

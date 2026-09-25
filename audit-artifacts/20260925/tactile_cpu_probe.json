@@ -1,0 +1,67 @@
+{
+  "torch_version": "2.10.0+cu128",
+  "device": "cpu",
+  "source_sha256": {
+    "cosmos-framework/cosmos_framework/model/generator/mot/cosmos3_vfm_network.py": "4b7b68c5494165ed52e4676e7fc2c8327a715b4050a1ac619ddd41663e3a3ad1",
+    "cosmos-framework/cosmos_framework/model/generator/omni_mot_model.py": "6af5bd06e7043758463c63814ad19fc5097812d280c1e00bcdaf9e336f0bb955",
+    "cosmos-framework/cosmos_framework/model/zeva/policy_injection.py": "5e52fcb07b1083f367a65e213527fff422a87a19e56007a9999024c3116badce"
+  },
+  "initialization": {
+    "tactile_head_parameters_uninitialized": [
+      "phase_head.0.weight",
+      "phase_head.0.bias",
+      "effect_head.0.weight",
+      "effect_head.0.bias",
+      "confidence_head.0.weight",
+      "confidence_head.0.bias"
+    ],
+    "tactile_head_output_finite": [
+      false,
+      false,
+      false
+    ],
+    "tactile_bit_all_parameters_finite": true,
+    "baseline_prior_all_parameters_finite": true,
+    "baseline_layernorms_exact_one_zero": {
+      "phase_query.0": true,
+      "effect_project.0": true,
+      "effect_norm": true,
+      "effect_gate.0": true,
+      "context_norm": true
+    },
+    "baseline_attention_all_parameters_finite": {
+      "effect_attention": true,
+      "progress_attention": true
+    },
+    "baseline_adapter_all_parameters_finite": true,
+    "baseline_global_projector_all_parameters_finite": true
+  },
+  "gradients": [
+    {
+      "last_effect_slot_valid": false,
+      "gate_grad": [
+        0.0
+      ],
+      "projector_grad_l1": 0.0,
+      "bit_grad_l1": 0.0,
+      "effect_head_grad_l1": 0.0,
+      "phase_head_grad_tensors": 0,
+      "confidence_head_grad_tensors": 0,
+      "encoder_grad_tensors": 0,
+      "phase_gate_has_grad": false
+    },
+    {
+      "last_effect_slot_valid": true,
+      "gate_grad": [
+        -0.00014508122694678605
+      ],
+      "projector_grad_l1": 0.9719456940656528,
+      "bit_grad_l1": 0.5607970528071746,
+      "effect_head_grad_l1": 0.1801652013673447,
+      "phase_head_grad_tensors": 0,
+      "confidence_head_grad_tensors": 0,
+      "encoder_grad_tensors": 0,
+      "phase_gate_has_grad": false
+    }
+  ]
+}

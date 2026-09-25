@@ -27,6 +27,13 @@ class _LossRecord:
         self.iter_count = 0
 
     def get_stat(self) -> Tuple[float, float]:
+        # Both all_reduces MUST be entered by every rank, including one that scored no
+        # validation batch at all. `validate()` runs on all ranks, and the sharded
+        # validation loader can starve a rank completely -- 3 val episodes across 8 ranks
+        # does exactly that. A rank that took an `else` branch here would skip the
+        # collective while every other rank blocked inside it, hanging the job.
+        avg_loss_tensor = torch.tensor([0.0], device="cuda")
+        valid_mask = torch.tensor([0.0], device="cuda")
         if self.iter_count > 0:
             avg_loss_tensor = self.loss / self.iter_count
             # Create a mask (1 if valid, 0 if NaN or Inf)
@@ -37,19 +44,12 @@ class _LossRecord:
                 torch.isfinite(avg_loss_tensor), avg_loss_tensor, torch.tensor([0.0], device="cuda")
             )
 
-            # Reduce across all ranks
-            dist.all_reduce(avg_loss_tensor, op=dist.ReduceOp.SUM)  # Sum of valid losses
-            dist.all_reduce(valid_mask, op=dist.ReduceOp.SUM)  # Count of valid losses
+        # Reduce across all ranks
+        dist.all_reduce(avg_loss_tensor, op=dist.ReduceOp.SUM)  # Sum of valid losses
+        dist.all_reduce(valid_mask, op=dist.ReduceOp.SUM)  # Count of valid losses
 
-            # Compute final average, avoiding division by zero
-            if valid_mask.item() > 0:
-                final_avg_loss = (avg_loss_tensor / valid_mask).item()
-            else:
-                final_avg_loss = 0.0  # Default to zero if all values were invalid
-
-            avg_loss = final_avg_loss
-        else:
-            avg_loss = 0
+        # Compute final average, avoiding division by zero
+        avg_loss = (avg_loss_tensor / valid_mask).item() if valid_mask.item() > 0 else 0.0
         self.reset()
         return avg_loss
 
@@ -86,10 +86,14 @@ class WandbCallback(Callback):
 
         dataset_name = data_batch.get("dataset_name", "default")
 
-        # Handle case where dataset_name gets batched into a list
+        # Action-policy batches carry one dataset name per packed sample
+        # (joint_dataloader.py:842), where the VLM batches this callback was written for
+        # produce a single-element list. All entries name the same dataset unless the
+        # loader is deliberately mixing several, in which case "mixed" is the honest label
+        # rather than whichever dataset happened to sort first.
         if isinstance(dataset_name, list):
-            assert len(dataset_name) == 1, "dataset_name should be a list of 1"
-            dataset_name = dataset_name[0]
+            names = {str(name) for name in dataset_name}
+            dataset_name = names.pop() if len(names) == 1 else "mixed"
 
         if dataset_name not in self.final_loss_log_per_dataset:
             self.final_loss_log_per_dataset[dataset_name] = _LossRecord()

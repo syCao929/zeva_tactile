@@ -1,0 +1,42 @@
+{
+  "explicitly_initialized_unused": [
+    "paligemma_with_expert.gemma_expert.lm_head.weight"
+  ],
+  "missing_prediction_weights": [],
+  "unexpected_weights": [],
+  "finite": true,
+  "source_values_equal_after_dtype_cast": true,
+  "source_checkpoint": "/workspace/mnt/sqzhang26/hf_weight/pi0_base",
+  "openpi": {
+    "root": "/workspace/mnt/sqzhang26/openpi-3d-tactile",
+    "source_dir": "/workspace/mnt/sqzhang26/openpi-3d-tactile/src",
+    "reference_commit": "215abfb217dbac7d5f1273282331b9b1866c0479",
+    "checkout_commit": "7a184ca5062bb2d4b00fa92af33cc21b74e90979",
+    "source_compatible": true,
+    "source_sha256": {
+      "models/pi0_config.py": "d321858c30b398126035ea2b6da09e1c422eeeebb5ebf8df631daf9dc77647fa",
+      "models_pytorch/pi0_pytorch.py": "dcd7b6f508808ce4b7170a1720a4c62c6da04edae3652d16c94a469dca924e16"
+    }
+  },
+  "converter_source_sha256": "62980fda1a1b1a09167d413232a2a9295db8370e52b58a70cfba52ef5d88c440",
+  "expert_source_sha256": "225092e06509da0ae37bb9dca55c00d2804255bb1496f7c8700304b4c52a95eb",
+  "source_metadata_sha256": {
+    "_METADATA": "53becee9a3ae880c6973f1ca3336bde9b58c5183336266f85b89160cdc18837d",
+    "manifest.ocdbt": "000802f3a26aa87cf1aeb7b747e7944a1523421474e809d781d7bda165d891d0",
+    "_CHECKPOINT_METADATA": "1c1989b5c422197d88d0177154417ae035085f17b60632992a1a2db349ba259b"
+  },
+  "parameter_count": 3501372176,
+  "dtype_parameter_counts": {
+    "torch.float32": 4335264,
+    "torch.bfloat16": 3497036912
+  },
+  "precision": "bfloat16",
+  "precision_note": "Official mixed dtype: selected norms, vision embeddings and action projections stay float32",
+  "source_array_count": 50,
+  "saved_weights_equal": true,
+  "model_sha256": "1cd1b4e4b0301d4f463e624e96c2083cf8ef25dadc7437f7057d44a24e2ff468",
+  "model_bytes": 7011543960,
+  "coverage_key_count": 778,
+  "saved_tensor_count": 777,
+  "saved_all_finite": true
+}

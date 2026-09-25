@@ -1,12 +1,12 @@
 import torch
 
+from cosmos_framework.model.zeva.brief_interaction_trace import BriefInteractionTrace
 from cosmos_framework.model.zeva.policy_injection import (
     CausalPromptPolicyAdapter,
     PolicyInjectionConfig,
     PolicyInjectionPrior,
     gaussian_prior_nll,
 )
-from cosmos_framework.model.zeva.brief_interaction_trace import BriefInteractionTrace
 
 
 def test_policy_injection_shapes_nll_and_zero_projection() -> None:
@@ -50,3 +50,32 @@ def test_brief_interaction_trace_tensor_path_is_exact() -> None:
     )
     assert torch.equal(tensor_path[0], paper_named[0])
     assert torch.equal(tensor_path[1], paper_named[1])
+
+
+def test_zero_current_effect_residual_preserves_baseline_with_any_visual_mask() -> None:
+    torch.manual_seed(7)
+    prior = PolicyInjectionPrior(PolicyInjectionConfig(horizon=4, action_dim=2))
+    context, phase = torch.randn(3, 256), torch.randn(3, 128)
+    effects = torch.randn(3, 4, 128)
+    valid = torch.tensor([[False, False, False, False], [False, False, True, True], [True, True, True, True]])
+    baseline = prior(context, phase, effects, valid)
+    actual = prior(context, phase, effects, valid, current_effect_residual=torch.zeros(3, 128))
+    assert torch.equal(actual[0], baseline[0])
+    assert torch.equal(actual[1], baseline[1])
+
+
+def test_current_effect_residual_is_added_after_bos_substitution() -> None:
+    torch.manual_seed(7)
+    prior = PolicyInjectionPrior(PolicyInjectionConfig(horizon=4, action_dim=2))
+    context, phase = torch.randn(2, 256), torch.randn(2, 128)
+    effects = torch.randn(2, 4, 128)
+    valid = torch.tensor([[False, False, False, False], [False, False, True, True]])
+    residual = torch.randn(2, 128)
+    actual = prior(context, phase, effects, valid, current_effect_residual=residual)
+    # The equivalent baseline input explicitly contains BOS for missing visual
+    # history, plus current evidence in its last slot.
+    explicit_effects = torch.where(valid.unsqueeze(-1), effects, prior.bos_effect).clone()
+    explicit_effects[:, -1] += residual
+    expected = prior(context, phase, explicit_effects, torch.ones_like(valid))
+    assert torch.equal(actual[0], expected[0])
+    assert torch.equal(actual[1], expected[1])

@@ -26,6 +26,21 @@ from .static_task_context_retrieval import (
     bidirectional_supervised_contrastive_loss,
     retrieve_static_task_context,
 )
+from .tactile_encoder import (
+    FrozenPatchInformedTactileEncoder,
+    FrozenTactileEncoderWithProjector,
+    PatchInformedFingerTokenizerTorch,
+    TactileEncoderAdapter,
+    TactileEncoderConfig,
+    TactileProjectionConfig,
+    TactileTokenProjector,
+)
+from .tactile_memory import (
+    TactileBIT,
+    TactileBITConfig,
+    TactileBehaviorConfig,
+    TactileBehaviorHead,
+)
 
 __all__ = [
     "CausalTransitionEncoder",
@@ -49,4 +64,15 @@ __all__ = [
     "CausalPromptEncoder",
     "inject_causal_prompt",
     "normalize_cte_state_dict",
+    "TactileEncoderAdapter",
+    "TactileEncoderConfig",
+    "PatchInformedFingerTokenizerTorch",
+    "FrozenPatchInformedTactileEncoder",
+    "TactileProjectionConfig",
+    "TactileTokenProjector",
+    "FrozenTactileEncoderWithProjector",
+    "TactileBIT",
+    "TactileBITConfig",
+    "TactileBehaviorConfig",
+    "TactileBehaviorHead",
 ]

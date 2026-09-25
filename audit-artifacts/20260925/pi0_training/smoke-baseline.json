@@ -1,0 +1,13 @@
+{
+  "extends": "../../../configs/pi0/xhand_baseline.json",
+  "output_dir": "runs/pi0/smoke-baseline-20260925",
+  "max_steps": 3,
+  "warmup_steps": 0,
+  "grad_accum": 1,
+  "num_workers": 0,
+  "log_every": 1,
+  "eval_every": 3,
+  "eval_batches": 2,
+  "save_every": 1,
+  "keep_checkpoints": 3
+}

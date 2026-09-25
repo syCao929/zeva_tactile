@@ -85,7 +85,14 @@ action_policy_xhand_zeva["optimizer"]["lr_multipliers"].update(
 
 # These modules do not exist in the Phase-1 checkpoint; without the skip list the
 # strict load would fail on three missing prefixes.
-action_policy_xhand_zeva["checkpoint"]["keys_to_skip_loading"] += [
+#
+# NOTE: written as an explicit list, NOT `+=`. This recipe deep-copies the Phase-1
+# recipe, so `+=` would also inherit its `"proprio_projector"` skip entry -- and the
+# Phase-1 checkpoint *does* carry a trained proprio_projector (it is trained in Phase 1
+# and frozen here). Skipping it would silently reset the frozen policy's proprio input
+# to xavier init, with no error and no visible symptom in the loss.
+action_policy_xhand_zeva["checkpoint"]["keys_to_skip_loading"] = [
+    "net_ema.",
     "behavior_pbd",
     "behavior_adapter",
     "behavior_global_projector",
@@ -101,6 +108,14 @@ action_policy_xhand_zeva["checkpoint"]["keys_to_skip_loading"] += [
 # treats a falsy value as "no wrapper" — training still gets one when the variable
 # is exported.
 action_policy_xhand_zeva["dataloader_train"]["dataloader"]["datasets"]["xhand"]["dataset"][
+    "zeva_feature_cache"
+] = "${oc.env:ZEVA_FEATURE_CACHE,null}"
+
+# The val loader needs the SAME wrapper. `_attach_stage2_behavior` demands the four
+# `behavior_*` tensors from *every* batch, validation included -- without this, the first
+# validation pass dies with a KeyError instead of with a bad number, and `dataloader_val`
+# is inherited from the Phase-1 recipe's deepcopy so it does exist here.
+action_policy_xhand_zeva["dataloader_val"]["dataloader"]["datasets"]["xhand"]["dataset"][
     "zeva_feature_cache"
 ] = "${oc.env:ZEVA_FEATURE_CACHE,null}"
 

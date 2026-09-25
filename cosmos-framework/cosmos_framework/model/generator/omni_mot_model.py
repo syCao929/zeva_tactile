@@ -259,6 +259,17 @@ class OmniMoTModel(ImaginaireModel):
                 language_model=language_model,
                 config=network_config,
             )
+            # The external tactile encoder is a real Torch state dict, unlike
+            # the meta-initialized Cosmos network. Materialize and load it
+            # before top-level FSDP turns its parameters into DTensors.
+            tactile_encoder = getattr(net, "tactile_encoder_projector", None)
+            tactile_checkpoint = getattr(net, "tactile_encoder_checkpoint", None)
+            if tactile_encoder is not None and tactile_checkpoint:
+                tactile_encoder.encoder.encoder.to_empty(device="cpu")
+                tactile_state = torch.load(tactile_checkpoint, map_location="cpu", weights_only=True)
+                tactile_encoder.encoder.encoder.load_state_dict(tactile_state, strict=True)
+                tactile_encoder.encoder.requires_grad_(False)
+                tactile_encoder.encoder.eval()
             residual_cfg = self.config.residual_expert
             if bool(residual_cfg.get("enabled", False)):
                 if lora_enabled:
@@ -307,6 +318,18 @@ class OmniMoTModel(ImaginaireModel):
                 # meta), since they are only for checkpoint conversion and smoke
                 # tests.
                 net.init_weights(buffer_device=DEVICE)
+                # ``to_empty`` above also empties the ignored, replicated
+                # external tactile encoder. Restore its frozen checkpoint only
+                # after all meta parameters have been materialized and the
+                # trainable BIT/head have been initialized.
+                tactile_encoder = getattr(net, "tactile_encoder_projector", None)
+                tactile_checkpoint = getattr(net, "tactile_encoder_checkpoint", None)
+                if tactile_encoder is not None and tactile_checkpoint:
+                    tactile_state = torch.load(tactile_checkpoint, map_location="cpu", weights_only=True)
+                    tactile_encoder.encoder.encoder.load_state_dict(tactile_state, strict=True)
+                    tactile_encoder.encoder.encoder.reset_patch_map()
+                    tactile_encoder.encoder.requires_grad_(False)
+                    tactile_encoder.encoder.eval()
                 if lora_enabled:
                     self._init_lora_weights_post_materialization(net)
 
@@ -747,6 +770,34 @@ class OmniMoTModel(ImaginaireModel):
             effect_valid = effect_valid[:, 0]
         if effect_features.ndim != 3 or effect_valid.shape != effect_features.shape[:2]:
             raise ValueError("Expected behavior_effect [B,4,D] and behavior_effect_valid [B,4]")
+        tactile_effect = None
+        if getattr(self.net, "tactile_bit", None) is not None:
+            if "tactile_state" not in data_batch or "tactile_valid" not in data_batch:
+                raise KeyError("tactile_enabled requires data_batch['tactile_state'] and ['tactile_valid']")
+
+            def tactile_batch(name: str) -> torch.Tensor:
+                value = data_batch[name]
+                if isinstance(value, (list, tuple)):
+                    value = torch.stack(list(value))
+                if not isinstance(value, torch.Tensor):
+                    raise TypeError(f"{name} must be tensor-valued")
+                # PackingDataLoader may retain a singleton auxiliary axis.
+                if value.ndim == 4 and value.shape[1] == 1:
+                    value = value[:, 0]
+                if name == "tactile_valid" and value.ndim == 3 and value.shape[1] == 1:
+                    value = value[:, 0]
+                return value
+
+            tactile_state = tactile_batch("tactile_state")
+            tactile_valid = tactile_batch("tactile_valid")
+            if tactile_state.ndim != 3 or tactile_valid.ndim != 2:
+                raise ValueError(
+                    f"Expected tactile_state [B,T,1972] and tactile_valid [B,T], got "
+                    f"{tuple(tactile_state.shape)} and {tuple(tactile_valid.shape)}"
+                )
+            _, tactile_effect, _ = self.net.encode_tactile_behavior(
+                tactile_state, tactile_valid
+            )
         global_indices = torch.tensor(action_sample_indices, dtype=torch.long, device=global_features.device)
         phase_indices = global_indices.to(device=phase_features.device)
         global_features = global_features.index_select(0, global_indices).to(
@@ -761,6 +812,10 @@ class OmniMoTModel(ImaginaireModel):
         effect_valid = effect_valid.index_select(0, global_indices.to(effect_valid.device)).to(
             device=packed_sequence.text_ids.device, dtype=torch.bool
         )
+        if tactile_effect is not None:
+            tactile_effect = tactile_effect.index_select(0, global_indices.to(tactile_effect.device)).to(
+                device=packed_sequence.text_ids.device, dtype=self.precision
+            )
         x0_actions = gen_data_clean.x0_tokens_action or []
         if len(x0_actions) != len(action_sample_indices):
             raise ValueError("Dense action payload does not match Stage-2 action sample indices")
@@ -775,6 +830,9 @@ class OmniMoTModel(ImaginaireModel):
         packed_sequence.behavior_phase = phase_features
         packed_sequence.behavior_effect = effect_features
         packed_sequence.behavior_effect_valid = effect_valid
+        # Keep current tactile evidence independent of completed visual effects.
+        # The prior substitutes BOS first, then adds the gated tactile residual.
+        packed_sequence.behavior_tactile_effect = tactile_effect
         if cfg.pim_memory_enabled:
             pim_names = ("behavior_pim_phase", "behavior_pim_effect", "behavior_pim_valid")
             if any(name not in data_batch for name in pim_names):
@@ -3746,8 +3804,31 @@ class OmniMoTModel(ImaginaireModel):
         )
 
     @torch.no_grad()
-    def validation_step(self, data_batch: dict[str, torch.Tensor], iteration: int):
-        pass
+    def validation_step(
+        self, data_batch: dict[str, torch.Tensor], iteration: int
+    ) -> tuple[dict[str, torch.Tensor], torch.Tensor]:
+        """Held-out loss for the generator family.
+
+        There is no separate validation objective -- this is the same rectified-flow loss
+        as :meth:`training_step`, evaluated without gradients on the val split.
+
+        ``ImaginaireTrainer.validate`` unpacks ``(output_batch, loss)``, so the previous
+        ``pass`` body returned ``None`` and killed the run with
+        ``TypeError: cannot unpack non-iterable NoneType object`` on the first validation
+        pass -- which lands *after* training has started, so the failure is expensive.
+
+        ``training_step`` additionally advances the CP window slot (a no-op at
+        ``cp_size == 1``) and bumps the net's sample counters, which are a *training*
+        metric. Restore those so a validation pass does not inflate samples-seen.
+        """
+        counters = ("accum_image_sample_counter", "accum_video_sample_counter")
+        saved = {name: getattr(self.net, name) for name in counters if hasattr(self.net, name)}
+        try:
+            output_batch, loss = self.training_step(data_batch, iteration)
+        finally:
+            for name, value in saved.items():
+                setattr(self.net, name, value)
+        return output_batch, loss
 
     @torch.no_grad()
     def forward(self, xt, t):

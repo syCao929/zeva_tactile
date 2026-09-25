@@ -60,7 +60,7 @@ def _load_real_frames(dataset_root: str, count: int) -> torch.Tensor:
         chunk_length=32,
         use_state=False,
         action_mode="full18",
-        state_mode="arm22",
+        state_mode="joint18",  # inert here (use_state=False)
         action_normalization=None,
     )
     # One window gives us a whole clip of composite frames; take the first few.

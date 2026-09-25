@@ -1,0 +1,7 @@
+{
+  "extends": "xhand_zeva.json",
+  "mode": "zeva_tactile",
+  "output_dir": "runs/pi0/zeva_xhand/v1-visual-tactile",
+  "tactile_checkpoint": "models/zeva/tactile_patch_encoder_19999.pt",
+  "tactile_memory_steps": 30
+}

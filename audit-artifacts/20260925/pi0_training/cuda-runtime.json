@@ -1,0 +1,9 @@
+{
+  "torch": "2.7.1+cu126",
+  "cuda_runtime": "12.6",
+  "gpu": "NVIDIA A800-SXM4-80GB",
+  "bf16_supported": true,
+  "forward_finite": true,
+  "backward_finite": true,
+  "visible_gpus": 1
+}

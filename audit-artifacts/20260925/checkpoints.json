@@ -1,0 +1,237 @@
+[
+  {
+    "checkpoint": "runs/zeva/action_xhand/v2-proprio-20260924/checkpoints/iter_000004000",
+    "parts": {
+      "model": {
+        "keys": 1622,
+        "shards": 8,
+        "size_GB": 91.06,
+        "errors": [],
+        "proprio_keys": {
+          "net.proprio_projector.weight": [
+            4096,
+            22
+          ],
+          "net.proprio_projector.bias": [
+            4096
+          ],
+          "net_ema.proprio_projector.weight": [
+            4096,
+            22
+          ],
+          "net_ema.proprio_projector.bias": [
+            4096
+          ]
+        },
+        "tactile_keys": [],
+        "behavior_keys": 0
+      },
+      "optim": {
+        "keys": 3708,
+        "shards": 8,
+        "size_GB": 55.874,
+        "errors": []
+      },
+      "scheduler": {
+        "keys": 8,
+        "shards": 1,
+        "size_GB": 0.0,
+        "errors": []
+      },
+      "trainer": {
+        "keys": 49,
+        "shards": 8,
+        "size_GB": 0.0,
+        "errors": []
+      }
+    }
+  },
+  {
+    "checkpoint": "runs/zeva/action_xhand/v3-joint18-20260925/checkpoints/iter_000000500",
+    "parts": {
+      "model": {
+        "keys": 1622,
+        "shards": 7,
+        "size_GB": 91.057,
+        "errors": [],
+        "proprio_keys": {
+          "net.proprio_projector.weight": [
+            4096,
+            18
+          ],
+          "net.proprio_projector.bias": [
+            4096
+          ],
+          "net_ema.proprio_projector.weight": [
+            4096,
+            18
+          ],
+          "net_ema.proprio_projector.bias": [
+            4096
+          ]
+        },
+        "tactile_keys": [],
+        "behavior_keys": 0
+      },
+      "optim": {
+        "keys": 3708,
+        "shards": 7,
+        "size_GB": 55.873,
+        "errors": []
+      },
+      "scheduler": {
+        "keys": 8,
+        "shards": 1,
+        "size_GB": 0.0,
+        "errors": []
+      },
+      "trainer": {
+        "keys": 43,
+        "shards": 7,
+        "size_GB": 0.0,
+        "errors": []
+      }
+    }
+  },
+  {
+    "checkpoint": "runs/zeva/action_xhand/v3-joint18-20260925/checkpoints/iter_000001000",
+    "parts": {
+      "model": {
+        "keys": 1622,
+        "shards": 7,
+        "size_GB": 91.057,
+        "errors": [],
+        "proprio_keys": {
+          "net.proprio_projector.weight": [
+            4096,
+            18
+          ],
+          "net.proprio_projector.bias": [
+            4096
+          ],
+          "net_ema.proprio_projector.weight": [
+            4096,
+            18
+          ],
+          "net_ema.proprio_projector.bias": [
+            4096
+          ]
+        },
+        "tactile_keys": [],
+        "behavior_keys": 0
+      },
+      "optim": {
+        "keys": 3708,
+        "shards": 7,
+        "size_GB": 55.873,
+        "errors": []
+      },
+      "scheduler": {
+        "keys": 8,
+        "shards": 1,
+        "size_GB": 0.0,
+        "errors": []
+      },
+      "trainer": {
+        "keys": 43,
+        "shards": 7,
+        "size_GB": 0.0,
+        "errors": []
+      }
+    }
+  },
+  {
+    "checkpoint": "runs/zeva/action_xhand/v3-joint18-20260925/checkpoints/iter_000001500",
+    "parts": {
+      "model": {
+        "keys": 1622,
+        "shards": 7,
+        "size_GB": 91.057,
+        "errors": [],
+        "proprio_keys": {
+          "net.proprio_projector.weight": [
+            4096,
+            18
+          ],
+          "net.proprio_projector.bias": [
+            4096
+          ],
+          "net_ema.proprio_projector.weight": [
+            4096,
+            18
+          ],
+          "net_ema.proprio_projector.bias": [
+            4096
+          ]
+        },
+        "tactile_keys": [],
+        "behavior_keys": 0
+      },
+      "optim": {
+        "keys": 3708,
+        "shards": 7,
+        "size_GB": 55.873,
+        "errors": []
+      },
+      "scheduler": {
+        "keys": 8,
+        "shards": 1,
+        "size_GB": 0.0,
+        "errors": []
+      },
+      "trainer": {
+        "keys": 43,
+        "shards": 7,
+        "size_GB": 0.0,
+        "errors": []
+      }
+    }
+  },
+  {
+    "checkpoint": "runs/zeva/zeva_xhand/action_policy_xhand_zeva/checkpoints/iter_000000500",
+    "parts": {
+      "model": {
+        "keys": 1696,
+        "shards": 8,
+        "size_GB": 91.077,
+        "errors": [],
+        "proprio_keys": {
+          "net.proprio_projector.weight": [
+            4096,
+            22
+          ],
+          "net.proprio_projector.bias": [
+            4096
+          ],
+          "net_ema.proprio_projector.weight": [
+            4096,
+            22
+          ],
+          "net_ema.proprio_projector.bias": [
+            4096
+          ]
+        },
+        "tactile_keys": [],
+        "behavior_keys": 74
+      },
+      "optim": {
+        "keys": 333,
+        "shards": 8,
+        "size_GB": 0.023,
+        "errors": []
+      },
+      "scheduler": {
+        "keys": 6,
+        "shards": 1,
+        "size_GB": 0.0,
+        "errors": []
+      },
+      "trainer": {
+        "keys": 49,
+        "shards": 8,
+        "size_GB": 0.0,
+        "errors": []
+      }
+    }
+  }
+]

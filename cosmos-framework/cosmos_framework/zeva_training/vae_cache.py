@@ -60,6 +60,11 @@ _VISION_HEIGHT = 480
 _VISION_WIDTH = 832
 _CACHE_VERSION = 1
 
+# One Wan latent frame per this many raw control steps — the VAE's temporal
+# compression factor, and the cadence serving sees (the client re-queries every 4
+# steps and sends one image).
+RAW_PER_LATENT = 4
+
 
 def _compose_frames(video: torch.Tensor) -> torch.Tensor:
     """``[C,T,H,W]`` uint8 composite (already left|wrist) -> ``[1,C,T,H',W']`` in [-1,1].
@@ -106,6 +111,34 @@ def encode_padded(vae, x: torch.Tensor) -> torch.Tensor:
     return latent[:, :, :valid]
 
 
+def encode_per_frame(vae, x: torch.Tensor) -> torch.Tensor:
+    """Encode each **boundary frame independently**, exactly as serving does.
+
+    The serving path sees one observation per request -- the client re-queries every
+    ``RAW_PER_LATENT`` control steps and sends a single image -- so the only latent it
+    can ever produce is ``_encode_cte_frame``'s single-frame one (``T=1``). A
+    whole-episode causal encode gives a *different* latent for the same frame: measured
+    on real content, cosine 0.72-0.85 and roughly **half the magnitude**, because the
+    causal encoder conditions on every preceding frame.
+
+    Training the CTE on the sequence encoding therefore makes every serving request out
+    of distribution. Encode per frame here so cache and server agree by construction,
+    and take only the boundary frames (index ``4k``) that serving actually observes --
+    ``1 + (T-1) // 4`` of them, the same count ``encode_padded`` produced.
+
+    This also matches the released RoboCasa server, which is the only inference
+    implementation the authors shipped.
+    """
+    frames = x[0].permute(1, 0, 2, 3)  # [C,T,H,W] -> [T,C,H,W]
+    lats = [
+        # frames[t:t+1] is [1,C,H,W]; unsqueeze(2) inserts the temporal axis -> [1,C,1,H,W],
+        # which is exactly what the server's `_encode_cte_frame` feeds the VAE.
+        vae.encode(frames[t : t + 1].unsqueeze(2))[0, :, 0]  # [C,h,w]
+        for t in range(0, frames.shape[0], RAW_PER_LATENT)
+    ]
+    return torch.stack(lats, dim=1).unsqueeze(0)  # [1,C,T_lat,30,52]
+
+
 def _decode_full_episode(dataset, episode) -> torch.Tensor:
     """Decode every frame of one episode as the 256x512 left|wrist composite.
 
@@ -129,7 +162,18 @@ def _decode_full_episode(dataset, episode) -> torch.Tensor:
     size = (dataset.view_size, dataset.view_size)
     left = F.interpolate(left, size=size, mode="bilinear", align_corners=False)
     wrist = F.interpolate(wrist, size=size, mode="bilinear", align_corners=False)
-    return torch.cat((left, wrist), dim=-1)  # [T,C,256,512]
+    # ``_compose_frames`` (and ``probe_vae._preprocess``) contract: **uint8 in [0,255]**,
+    # which they map to [-1,1] via ``/127.5 - 1``. ``decode_video_frames`` returns
+    # floats in [0,1], so the scaling has to happen here.
+    #
+    # Returning them unscaled -- which this function did until 2026-09-24 -- meant
+    # ``_compose_frames`` computed ``0.4/127.5 - 1 ~= -0.997`` for every pixel: the Wan
+    # VAE was fed a near-constant black image, and *every* latent in the CTE cache was
+    # built from it. The scene content survived only in the ~0.4% residual, which is why
+    # the resulting CTE produced near-constant phase/effect that looked like a loss
+    # problem. Verified by encoding one episode both ways: the cached latents match the
+    # unscaled pipeline at cosine 0.9994 and the correct one at 0.169.
+    return (torch.cat((left, wrist), dim=-1) * 255.0).clamp_(0.0, 255.0).to(torch.uint8)
 
 
 def rebuild_manifest(out_dir: Path, args: argparse.Namespace) -> int:
@@ -220,7 +264,7 @@ def main() -> int:
         chunk_length=args.chunk_length,
         use_state=False,
         action_mode="full18",
-        state_mode="arm22",
+        state_mode="joint18",  # inert here (use_state=False); the cache holds no state at all
         action_normalization=None,
         split="full",  # cache every episode; train/val split happens downstream
         parquet_cache_size=1,
@@ -293,7 +337,10 @@ def main() -> int:
 
         x = _compose_frames(video).cuda()
         with torch.no_grad():
-            latent = encode_padded(vae, x)  # [1,48,T_lat,30,52]
+            # Per-frame, NOT `encode_padded`: serving can only produce single-frame
+            # latents (one image per request), so the cache must match it. See
+            # `encode_per_frame`.
+            latent = encode_per_frame(vae, x)  # [1,48,T_lat,30,52]
 
         # Latent i corresponds to raw frame 4i, so the cache should carry exactly
         # ceil((length-1)/4)+1 of them — verify rather than trust.

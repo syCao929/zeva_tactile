@@ -70,7 +70,18 @@ _HAND_TORQUE = tuple(range(29, 52, 2))
 
 _STATE_INDICES = {
     "arm6": tuple(range(6)),
-    "arm22": tuple(range(6)) + tuple(range(12, 28)),
+    # 18 == exactly the `full18` action space: the arm + hand joint positions the policy
+    # commands, in the same absolute parameterization it commands them in. State ==
+    # "where the joints are now", action == "where they should go next"; in this dataset
+    # `action[t]` tracks `state[t]` to within ~0.01 rad (cosine 0.99 arm / 0.96 hand).
+    #
+    # This is the shape the two reference implementations both use. pi0/pi0.5 hard-code
+    # it -- `state_proj = nnx.Linear(config.action_dim, width)` (openpi pi0.py:159) --
+    # so a policy there *cannot* be built with a state of any other width. Zeva's own
+    # proprio (RoboCasa `arm9` = relative EEF pose 7 + gripper qpos 2) instead matches
+    # its `arm7` action's DOF set (end-effector + gripper) in absolute form, which is the
+    # same principle: state and action describe the same joints.
+    "joint18": tuple(range(6)) + _HAND_POS,
     "arm34": tuple(range(6)) + tuple(range(12, 28)) + _HAND_POS,
     "full52": tuple(range(52)),
 }
@@ -110,12 +121,14 @@ class XHandLeRobotDataset(Dataset):
         mode: str = "wam",
         viewpoint: str = "concat_view",
         use_state: bool = False,
+        use_tactile: bool = False,
+        tactile_memory_steps: int = 30,
         use_image_augmentation: bool = False,
         emit_behavior_metadata: bool = False,
         task_names: Sequence[str] | None = None,
         camera_layout: str = "left_wrist_horizontal",
         action_mode: str = "full18",
-        state_mode: str = "arm22",
+        state_mode: str = "joint18",
         action_normalization: str | None = "minmax",
         action_stats_path: str | None = None,
         view_size: int = 256,
@@ -142,6 +155,13 @@ class XHandLeRobotDataset(Dataset):
         self.mode = mode
         self.viewpoint = viewpoint
         self.use_state = bool(use_state)
+        # Keep the full raw state sequence separate from ``proprio``.  The
+        # latter is normalized/padded by the policy input path; tactile values
+        # must reach the dedicated encoder with their checkpoint normalization.
+        self.use_tactile = bool(use_tactile)
+        self.tactile_memory_steps = int(tactile_memory_steps)
+        if self.tactile_memory_steps <= 0:
+            raise ValueError("tactile_memory_steps must be positive")
         self.use_image_augmentation = bool(use_image_augmentation)
         self.emit_behavior_metadata = bool(emit_behavior_metadata)
         self.task_names = frozenset(task_names) if task_names is not None else None
@@ -312,6 +332,23 @@ class XHandLeRobotDataset(Dataset):
         }
         if initial_state is not None:
             result["proprio"] = initial_state
+        if self.use_tactile:
+            # The tactile branch is causal: each policy window receives the
+            # current frame and only the preceding 15 Hz frames.  At an
+            # episode boundary we left-pad with zeros and expose a validity
+            # mask so BIT can leave its recurrent state untouched during warmup.
+            history_start = max(0, frame_offset - self.tactile_memory_steps + 1)
+            history = low_dim["state"][history_start : frame_offset + 1].clone()
+            left_pad = self.tactile_memory_steps - history.shape[0]
+            if left_pad:
+                history = torch.cat((torch.zeros((left_pad, *history.shape[1:]), dtype=history.dtype), history), dim=0)
+            result["tactile_state"] = history
+            result["tactile_valid"] = torch.cat(
+                (
+                    torch.zeros(left_pad, dtype=torch.bool),
+                    torch.ones(self.tactile_memory_steps - left_pad, dtype=torch.bool),
+                )
+            )
         if self.emit_behavior_metadata:
             result["behavior_source_index"] = torch.tensor(episode_index, dtype=torch.long)
             result["behavior_episode_id"] = torch.tensor(episode.episode_id, dtype=torch.long)

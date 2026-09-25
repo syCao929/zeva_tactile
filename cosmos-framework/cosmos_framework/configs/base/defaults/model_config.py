@@ -160,6 +160,12 @@ class ZevaPolicyConfig:
     # than an empty validity mask because it also preserves the compiled graph
     # used by the frozen base policy.
     pim_force_bypass: bool = False
+    # Optional causal XHand tactile branch. The frozen external encoder is
+    # followed by a trainable projector, BIT window, and gated effect residual.
+    tactile_enabled: bool = False
+    tactile_encoder_checkpoint: str | None = None
+    tactile_memory_steps: int = 30
+    tactile_token_dim: int = 256
 
 
 # Serialized releases may still reference this fully qualified type name.

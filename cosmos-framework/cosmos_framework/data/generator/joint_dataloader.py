@@ -14,14 +14,14 @@ import torch
 import webdataset
 from torch.utils.data.dataloader import default_collate
 
-from cosmos_framework.utils.lazy_config import instantiate
-from cosmos_framework.utils import log
 from cosmos_framework.model.generator.tokenizers.uniae.frame_math import (
     get_uniae_chunk_frames,
     get_uniae_latent_num_frames,
     normalize_uniae_chunk_frames,
 )
+from cosmos_framework.utils import log
 from cosmos_framework.utils.generator.data_utils import read_positive_int_metadata
+from cosmos_framework.utils.lazy_config import instantiate
 
 _TIMING_KEYS = {"_sample_time", "_aug_time", "_pre_aug_time", "_aug_step_times"}
 _BATCH_TIMING_KEYS = {
@@ -1057,6 +1057,7 @@ class PackingDataLoader(JointDataLoader):
         lookahead_limit: int = JointDataLoader._DEFAULT_LOOKAHEAD_LIMIT,
         uniae_chunk_frames: int | Mapping[str, int] | None = None,
         uniae_pad_frames: int | None = None,
+        restart_on_iter: bool = False,
     ):
         """
         Args:
@@ -1074,6 +1075,9 @@ class PackingDataLoader(JointDataLoader):
             lookahead_limit: Packing-loop look-ahead for the wrapped dataloader.
             uniae_chunk_frames: Optional UniAE full chunk size, or resolution-keyed chunk sizes.
             uniae_pad_frames: Optional UniAE boundary padding frames per chunk.
+            restart_on_iter: Restart the source and discard buffered samples for each
+                subsequent iteration, including after an interrupted pass. Use for finite
+                validation loaders; the default preserves training stream continuity.
         """
         wrapped = {dataset_name: {"dataloader": dataloader, "ratio": 1}}
         super().__init__(
@@ -1089,9 +1093,17 @@ class PackingDataLoader(JointDataLoader):
             uniae_chunk_frames=uniae_chunk_frames,
             uniae_pad_frames=uniae_pad_frames,
         )
+        self.restart_on_iter = restart_on_iter
+        self._iteration_started = False
 
     def __iter__(self):
         inner = self.dataloader_list[0]
+        if self.restart_on_iter and self._iteration_started:
+            self.buffers[0].clear()
+            self.dataloaders[0] = iter(inner)
+        # Keep the prewarmed samples on the first pass, including when the trainer
+        # has restored global_id via set_start_iteration before creating its iterator.
+        self._iteration_started = True
         ds_name = getattr(inner, "dataset_name", self.dataset_name_list[0])
 
         while True:

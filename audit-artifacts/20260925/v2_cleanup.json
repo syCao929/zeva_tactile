@@ -1,0 +1,144 @@
+{
+  "started_at": "2026-09-25T15:37:02.869458+08:00",
+  "stopped_server_pid": 126596,
+  "v3_training_pid_preserved": 131922,
+  "items": [
+    {
+      "path": "/workspace/mnt/sqzhang26/zeva-work/runs/zeva/action_xhand/v2-proprio-20260924",
+      "file_count": 42,
+      "bytes": 146939912907,
+      "allocated_bytes": 146939926528,
+      "symlinks": [],
+      "removed": true
+    },
+    {
+      "path": "/workspace/mnt/sqzhang26/zeva-work/runs/zeva/zeva_xhand/action_policy_xhand_zeva",
+      "file_count": 42,
+      "bytes": 91103775142,
+      "allocated_bytes": 91103785984,
+      "symlinks": [],
+      "removed": true
+    },
+    {
+      "path": "/workspace/mnt/sqzhang26/zeva-work/logs/v2-proprio-20260924.log",
+      "file_count": 1,
+      "bytes": 1435885,
+      "allocated_bytes": 1436160,
+      "symlinks": [],
+      "removed": true
+    },
+    {
+      "path": "/workspace/mnt/sqzhang26/zeva-work/logs/v2-proprio-20260924-provenance.txt",
+      "file_count": 1,
+      "bytes": 861,
+      "allocated_bytes": 1024,
+      "symlinks": [],
+      "removed": true
+    },
+    {
+      "path": "/workspace/mnt/sqzhang26/zeva-work/logs/serve-stage1.log",
+      "file_count": 1,
+      "bytes": 10129,
+      "allocated_bytes": 10240,
+      "symlinks": [],
+      "removed": true
+    },
+    {
+      "path": "/workspace/mnt/sqzhang26/zeva-work/logs/zeva-stage2.log",
+      "file_count": 1,
+      "bytes": 1918516,
+      "allocated_bytes": 1918976,
+      "symlinks": [],
+      "removed": true
+    },
+    {
+      "path": "/workspace/mnt/sqzhang26/zeva-work/cosmos-framework/outputs/train/logs/action_policy_xhand_zeva_sft.log",
+      "file_count": 1,
+      "bytes": 414580,
+      "allocated_bytes": 414720,
+      "symlinks": [],
+      "removed": true
+    },
+    {
+      "path": "/tmp/cosmos3_action_server/robolab",
+      "file_count": 3,
+      "bytes": 40441,
+      "allocated_bytes": 49152,
+      "symlinks": [],
+      "removed": true
+    },
+    {
+      "path": "/tmp/zeva-eval",
+      "file_count": 43,
+      "bytes": 146939967726,
+      "allocated_bytes": 146940047360,
+      "symlinks": [],
+      "removed": true
+    },
+    {
+      "path": "/tmp/eval2500.out",
+      "file_count": 1,
+      "bytes": 52082,
+      "allocated_bytes": 53248,
+      "symlinks": [],
+      "removed": true
+    },
+    {
+      "path": "/tmp/eval2.sh",
+      "file_count": 1,
+      "bytes": 492,
+      "allocated_bytes": 4096,
+      "symlinks": [],
+      "removed": true
+    },
+    {
+      "path": "/tmp/eval2.out",
+      "file_count": 1,
+      "bytes": 0,
+      "allocated_bytes": 0,
+      "symlinks": [],
+      "removed": true
+    },
+    {
+      "path": "/tmp/eval_rest.sh",
+      "file_count": 1,
+      "bytes": 645,
+      "allocated_bytes": 4096,
+      "symlinks": [],
+      "removed": true
+    },
+    {
+      "path": "/tmp/eval_rest.out",
+      "file_count": 1,
+      "bytes": 0,
+      "allocated_bytes": 0,
+      "symlinks": [],
+      "removed": true
+    },
+    {
+      "path": "/tmp/zeva-eval-2.txt",
+      "file_count": 1,
+      "bytes": 0,
+      "allocated_bytes": 0,
+      "symlinks": [],
+      "removed": true
+    },
+    {
+      "path": "/tmp/zeva-eval-table.txt",
+      "file_count": 1,
+      "bytes": 112,
+      "allocated_bytes": 4096,
+      "symlinks": [],
+      "removed": true
+    }
+  ],
+  "finished_at": "2026-09-25T15:37:10.538130+08:00",
+  "removed_logical_bytes": 384987529518,
+  "removed_allocated_bytes": 384987655680,
+  "verification": {
+    "all_targets_absent": true,
+    "v3_and_shared_artifacts_present": true,
+    "gpu0_memory_used_mib": 0,
+    "v3_training_pid": 131922
+  }
+}

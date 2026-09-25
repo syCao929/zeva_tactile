@@ -40,7 +40,20 @@ class ActionSFTDataset(Dataset):
         return len(self._dataset)
 
     def __getitem__(self, idx: int) -> dict[str, Any]:
-        return self._transform(self._dataset[idx], self._resolution)
+        # Forward the wrapped dataset's action normalizer into the pipeline. Every
+        # piece of this exists already -- the dataset builds it from
+        # `feature_stats_compact.json`, `ActionTransformPipeline.__call__` accepts it, and
+        # `ActionProcessor.preprocess_action` applies it -- but nothing ever passed it, so
+        # actions reached the model RAW while the serving side de-normalized its output
+        # (`action_policy_server_xhand.py:_build_normalizer`). That is a silent
+        # train/serve mismatch of the primary output: with XHand's joint ranges the
+        # inverse transform can shift a commanded joint by up to ~1 rad.
+        #
+        # Harmless where the normalizer is absent or an identity (DROID sets
+        # `action_normalization=None`; RoboCasa's arm7 actions already live in [-1,1]).
+        get_normalizer = getattr(self._dataset, "get_action_normalizer", None)
+        normalizer = get_normalizer() if callable(get_normalizer) else None
+        return self._transform(self._dataset[idx], self._resolution, action_normalizer=normalizer)
 
     def get_shuffle_blocks(self):
         """Delegate to the inner DROIDLeRobotDataset (per-episode/segment flat-index blocks)."""
@@ -220,8 +233,10 @@ def get_action_xhand_sft_dataset(
     chunk_length: int = 32,
     mode: str = "wam",
     use_state: bool = True,
+    use_tactile: bool = False,
+    tactile_memory_steps: int = 30,
     action_mode: str = "full18",
-    state_mode: str = "arm22",
+    state_mode: str = "joint18",
     camera_layout: str = "left_wrist_horizontal",
     viewpoint: str = "concat_view",
     view_size: int = 256,
@@ -248,8 +263,9 @@ def get_action_xhand_sft_dataset(
     """Build the UR7e + XHand action-policy SFT dataset.
 
     Feeds ``XHandLeRobotDataset`` (joint-position actions, ``full18`` by default =
-    6 arm + 12 hand joints; ``arm22`` proprio = arm joints + ee pose) through
-    ``ActionTransformPipeline``. ``root`` follows the same on-disk convention as
+    6 arm + 12 hand joints; ``joint18`` proprio = those same 18 joints, the state
+    the policy conditions on) through ``ActionTransformPipeline``. ``root`` follows
+    the same on-disk convention as
     RoboCasa365 — a directory of independent LeRobot v2.1 roots laid out as
     ``<root>/<category>/<task>/<x>/lerobot``.
 
@@ -271,6 +287,8 @@ def get_action_xhand_sft_dataset(
         mode=mode,
         viewpoint=viewpoint,
         use_state=use_state,
+        use_tactile=use_tactile,
+        tactile_memory_steps=tactile_memory_steps,
         use_image_augmentation=use_image_augmentation,
         emit_behavior_metadata=emit_behavior_metadata,
         camera_layout=camera_layout,
